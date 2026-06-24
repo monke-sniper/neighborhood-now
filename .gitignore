@@ -40,3 +40,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# development documentation — not for the public repo
+/AGENTS.md
+/BUILD.md
+/CLAUDE.md
+/FUTUREHACKS.md
+/PLAN.md
