@@ -9,7 +9,7 @@
 | | | |
 |---|---|---|
 | 🚀 **[Live demo](#demo)** | 📺 **[2-min video](#demo)** | 🏆 **[Devpost](#demo)** |
-| ⚡ **[Quick start](#quick-start)** | 🏗️ **[Architecture](#architecture)** | 🛠️ **[API reference](#api-endpoints)** |
+| ⚡ **[Quick start](#quick-start)** | 🏗️ **[Architecture](#architecture)** | ⭐ **[GitHub repo](https://github.com/monke-sniper/neighborhood-now)** |
 | 🧪 **[Try these addresses](#demo)** | 🎨 **[Customize it](#customization)** | 🩹 **[Troubleshooting](#troubleshooting)** |
 
 ---
@@ -76,7 +76,7 @@ You'll need **Node.js 20.9 or newer** and **npm 10+**. That's it.
 ### 1. Get the code
 
 ```bash
-git clone <your-repo-url> neighborhood-now
+git clone https://github.com/monke-sniper/neighborhood-now.git
 cd neighborhood-now
 npm install
 ```
