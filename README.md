@@ -14,6 +14,7 @@ Neighborhood Now is a neighborhood intelligence platform built for FutureHacks 2
 - [Quick Start](#quick-start)
 - [Environment Variables](#environment-variables)
 - [Scripts](#scripts)
+- [Tests](#tests)
 - [Architecture](#architecture)
 - [Project Structure](#project-structure)
 - [API Reference](#api-reference)
@@ -27,11 +28,12 @@ Neighborhood Now is a neighborhood intelligence platform built for FutureHacks 2
 
 ## Features
 
-- **Livability score** — 0–100 rating across amenity density, transit access, food access, green space, and development activity, normalized against city baselines
-- **Anomaly detection** — Poisson-approximation z-score flags permit and complaint spikes against a six-month rolling baseline. Warnings at |z| > 2, critical at |z| > 3
-- **Two-year forecast** — ordinary-least-squares linear regression on twelve months of history, extrapolated to six, twelve, and twenty-four months with R² confidence bands
-- **What-if simulator** — toggle a new subway station, park, development, or grocery store and see the score delta, computed client-side
-- **AI chat** — natural-language questions about the neighborhood, answered from the structured report only
+- **Livability score** — 0–100 rating across amenity density, transit access, food access, green space, and development activity. Each component is normalized via `((actual - p10) / (p90 - p10)) × 100` against live Toronto benchmarks captured at build time. Includes a Top 10% / Above average / Average / Below average / Bottom 25% ranking label
+- **Anomaly detection** — 12+ signal sources scored with Poisson-approximation z-score against the citywide p50 baseline. Warnings at |z| > 1.8, critical at |z| > 3. Surfaces both over- and under-represented metrics
+- **Two-year forecast** — EWMA smoothing for short series (n < 6), ordinary-least-squares regression for longer series (n ≥ 6), with one-sigma confidence bands and a R²-based confidence label
+- **What-if simulator** — six scenarios (subway, park, 500-unit development, grocery, school, transit strike). Impacts are grounded in the current state, so a subway in a transit-poor area produces a larger delta than one in a transit-rich area
+- **AI chat** — natural-language questions about the neighborhood, answered from the structured report only. Uses Ollama Cloud when `OLLAMA_API_KEY` is set, otherwise returns a stub message
+- **Terminal aesthetic** — JetBrains Mono, pure black background, teal `#5eead4` accents, sharp borders, `[BRACKET]` labels, and a top status bar with live clock and source health
 
 ## Quick Start
 
@@ -51,6 +53,8 @@ npm install
 cp .env.example .env.local
 ```
 
+On Windows PowerShell use `Copy-Item .env.example .env.local` instead.
+
 Edit `.env.local` and add any keys you have. The application runs without any keys: geocoding, OpenStreetMap amenities, building permits, and 311 complaints all use free public sources. Keys only enable the optional layers.
 
 ### 3. Run
@@ -69,6 +73,17 @@ npm start
 ```
 
 The output is a standard Next.js Node.js build that runs on any Node 20.9+ host.
+
+### 5. Other useful commands
+
+```bash
+npm test              # run 42 vitest unit + API tests
+npm run test:watch    # vitest in watch mode
+npm run calibrate     # re-capture Toronto benchmarks from live APIs
+npm run verify        # end-to-end: spawn dev server, hit 4 demo addresses, dump verification/*.json
+npm run lint          # eslint
+npx tsc --noEmit      # type check (no separate script)
+```
 
 ## Environment Variables
 
@@ -90,8 +105,36 @@ The map does not require a key. MapLibre GL renders the CARTO dark-matter basema
 | `npm run dev` | Start the development server with hot reload on port 3000 |
 | `npm run build` | Production build using Turbopack. Exits when complete |
 | `npm start` | Run the production build |
+| `npm test` | Run vitest unit + API tests (42 tests) |
+| `npm run test:watch` | Vitest in watch mode |
+| `npm run calibrate` | Re-capture live Toronto benchmarks from Overpass + BuildData + 311 file. Writes `src/lib/engine/benchmarks.ts` |
+| `npm run verify` | End-to-end verification: spawns dev server, hits 4 demo addresses, writes `verification/<address>.json`, prints summary, kills server |
 | `npm run lint` | Run ESLint with the Next.js configuration |
-| `npm run typecheck` | Run `tsc --noEmit` in strict mode. Should always pass |
+| `npx tsc --noEmit` | Type check in strict mode (no separate script) |
+
+## Tests
+
+42 tests across 5 files. They run against in-memory data only (no network), so they are fast (~250 ms total) and deterministic.
+
+```bash
+npm test
+```
+
+| File | Tests | What it covers |
+|---|---:|---|
+| `tests/score.test.ts` | 14 | Percentile scoring, ranking, clamp behavior, the no-13/100-floor invariant |
+| `tests/anomalies.test.ts` | 5 | Z-score thresholds, citywide-baseline fallback, sort order |
+| `tests/forecast.test.ts` | 9 | EWMA for n<6, OLS for n≥6, confidence bands, R² thresholds |
+| `tests/whatif.test.ts` | 10 | Six scenarios, grounded impacts, clamp behavior |
+| `tests/api.test.ts` | 4 | `/api/report` GET handler: 400 on missing address, 200 with body, `?debug=1` shape |
+
+The end-to-end harness lives at `scripts/verify.mjs` and is run separately:
+
+```bash
+npm run verify
+```
+
+It spawns `next dev` on port 3939, hits `/api/report?address=<each demo>&debug=1` for four addresses, writes `verification/<address>.json`, prints a per-address summary, then kills the server. Used to prove the live system returns varied scores and that no source reports `failed`.
 
 ## Architecture
 
@@ -103,17 +146,17 @@ address string
    ▼
 [ Nominatim ] ──► {lat, lon, display_name}      (1 req/sec, cached 24h)
    │
-   ├──► [ Overpass ]    ──► amenities, transit, landuse     (live, radius 1.5km)
-   ├──► [ BuildData ]   ──► permits[] (filtered by 500m)   (live, cached 1h)
+   ├──► [ Overpass ]    ──► amenities, transit, landuse     (live, radius 1.5km, 3 mirrors)
+   ├──► [ BuildData ]   ──► permits[] (filtered by 1.5km)   (live, cached 1h)
    ├──► [ 311 File ]    ──► complaints[]                    (file snapshot, 1.5km)
    ├──► [ Census ]      ──► demographics                    (US only, optional)
    └──► [ OpenWeather ] ──► air quality                     (optional)
    │
    ▼
-[ score engine ]       ──► LivabilityScore (0-100, 5 components)
-[ anomalies engine ]   ──► Anomaly[]   (z-score, |z|>2 warn, |z|>3 critical)
-[ forecast engine ]    ──► Trend[]     (OLS regression, R² confidence)
-[ whatif engine ]      ──► ScenarioResult[] (toggleable, client-side deltas)
+[ score engine ]       ──► LivabilityScore (0-100, 5 components, percentile-ranked)
+[ anomalies engine ]   ──► Anomaly[]   (z-score, |z|>1.8 warn, |z|>3 critical)
+[ forecast engine ]    ──► Trend[]     (EWMA n<6, OLS n≥6, 1σ bands)
+[ whatif engine ]      ──► ScenarioResult[] (6 scenarios, grounded impacts)
    │
    ▼
 UI: Map | ReportCard | AnomalyList | ForecastChart | WhatIfSimulator | ChatBox
@@ -173,13 +216,13 @@ All POST endpoints accept and return JSON. The orchestrator returns a full `Neig
 
 ## Engine Reference
 
-**Score** (`src/lib/engine/score.ts`) — counts amenities, transit stops, and grocery stores in a 1.5 km radius, normalizes each component to 0–100 against Toronto baselines, then computes a weighted average using weights from `src/lib/config.ts`: amenity 25%, transit 25%, food 20%, green 15%, development 15%.
+**Score** (`src/lib/engine/score.ts`) — counts amenities, transit stops, and grocery stores in a 1.5 km radius, normalizes each component via `((actual - p10) / (p90 - p10)) × 100` against the live Toronto benchmarks in `src/lib/engine/benchmarks.ts`, then computes a weighted average using weights from `src/lib/config.ts`: amenity 25%, transit 25%, food 20%, green 15%, development 15%. Returns a `ranking` label of Top 10% / Above average / Average / Below average / Bottom 25%.
 
-**Anomalies** (`src/lib/engine/anomalies.ts`) — Poisson-approximation z-score, defined as `z = (current - baseline) / √baseline`. Signals with |z| ≤ 2 are dropped. Remaining anomalies are sorted by |z| descending. The implementation is approximately twenty lines.
+**Anomalies** (`src/lib/engine/anomalies.ts`) — twelve plus signal sources (overall + per-metric amenity counts, permits, complaints, optional air and census) scored with Poisson-approximation z-score `z = (current - baseline) / √baseline` against the citywide p50 baseline. Signals with |z| ≤ 1.8 are dropped. Remaining anomalies are sorted by |z| descending.
 
-**Forecast** (`src/lib/engine/forecast.ts`) — ordinary-least-squares linear regression on a twelve-month history. R² drives the confidence label: above 0.7 is high, above 0.4 is medium, otherwise low. The function returns the current value with `confidence: 'low'` when fewer than three months of data are available.
+**Forecast** (`src/lib/engine/forecast.ts`) — exponential-weighted moving average for short series (n = 3..5), ordinary-least-squares regression for longer series (n ≥ 6), with one-sigma residual-based confidence bands at the 6, 12, and 24 month horizons. R² drives the confidence label: above 0.7 is high, above 0.4 is medium, otherwise low.
 
-**What-if** (`src/lib/engine/whatif.ts`) — four hard-coded scenarios (subway, park, development, grocery), each carrying a `Partial<ScoreBreakdown>` impact. The simulator clamps the modified components to 0–100, then re-runs the weighted total. Computation is client-side with no network round-trip.
+**What-if** (`src/lib/engine/whatif.ts`) — six scenarios (subway, park, 500-unit development, grocery, school, transit strike). Each impact can be a constant or a function of the current breakdown, so a subway in a transit-poor area produces a larger delta than one in a transit-rich area. The simulator clamps the modified components to 0–100, then re-runs the weighted total. Computation is client-side with no network round-trip.
 
 ## Customization
 
