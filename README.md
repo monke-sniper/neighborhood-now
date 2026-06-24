@@ -14,9 +14,9 @@
 
 ---
 
-## 👋 Hi, this is Neighborhood Now
+## This is Neighborhood Now
 
-We built this in 48 hours for **FutureHacks 2026** to answer one deceptively simple question: *what's this neighborhood becoming?*
+We built this to answer one deceptively simple question: *what's this neighborhood becoming?*
 
 Not what it looks like right now (Google Maps can do that). Not what it scored last year (Walk Score can do that). **Where it's heading.** The thing nobody tells you.
 
@@ -38,15 +38,8 @@ Type an address. The future is in there somewhere.
 - 🧪 **What-if simulator** — toggle a new subway station, park, development, or grocery store and watch the score move. Useful for both city planners and curious neighbors
 - 💬 **AI chat** — ask natural-language questions about the neighborhood, answered only from the data on the page (no hallucinated numbers)
 
----
 
-## Demo
-
-- 🌐 **Live URL:** _drop your deployed link here_
-- 📺 **2-min demo video:** _drop your Devpost video link here_
-- 🏆 **Devpost submission:** _drop your Devpost URL here_
-
-### 🧪 Try these addresses (Toronto — pre-tuned for the demo)
+### 🧪 Try these addresses
 
 - `123 Queen St W, Toronto`
 - `CN Tower, Toronto`
@@ -57,17 +50,6 @@ The app works globally — type any address on Earth and you'll get a report. Th
 
 ---
 
-## 📸 Screenshots
-
-Drop your screenshots/GIFs into a `docs/` folder and reference them here.
-
-```
-[screenshot: report view — map + score + amenity counts]
-[screenshot: anomaly list with severity badges]
-[screenshot: 2-year forecast chart]
-```
-
----
 
 ## ⚡ Quick start
 
@@ -304,7 +286,6 @@ We're being honest about these:
 - **311 data is a static file** (44 records, Toronto). For other cities or live data, replace `data/toronto-311.json` or wire a real API endpoint in `src/lib/api/complaints.ts`.
 - **Forecast needs 3+ months of history.** Fewer than that and you get the current value back with low confidence. That's the honest answer when there's not enough data.
 - **Ollama Cloud has free-tier rate limits.** Heavy demo traffic can hit 429. For unlimited, switch to local Ollama by setting `OLLAMA_BASE_URL=http://localhost:11434` and running `ollama serve` with the model pulled.
-- **Score baselines are tuned for Toronto.** Other cities will score lower until you adjust the constants in `src/lib/engine/score.ts`. We left them magic-numbered for transparency — change them, see what happens.
 - **No mobile optimization.** The layout is desktop-first. It'll work on mobile, but it's not pretty. Resize the browser to verify on your target device before submitting.
 
 ---
@@ -337,7 +318,6 @@ This thing is stitched together from a lot of generous open data. Thank you to:
 - **US Census Bureau** — for the American Community Survey
 - **OpenWeather** — for the air-quality API
 
-And to the FutureHacks 2026 organizers for the push.
 
 ---
 
