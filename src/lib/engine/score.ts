@@ -1,70 +1,133 @@
 import { CONFIG } from '../config';
+import { BENCHMARKS } from './benchmarks';
 import type {
   Amenity,
   LivabilityScore,
   Permit,
+  Ranking,
   ScoreBreakdown,
 } from '../types';
 
-const AREA_KM2 = (CONFIG.overpass.radiusMeters / 1000) ** 2 * Math.PI;
+const SIX_MONTHS_MS = 1000 * 60 * 60 * 24 * 30 * 6;
+const NEUTRAL = 50;
 
-function clamp(n: number, lo = 0, hi = 100): number {
-  return Math.max(lo, Math.min(hi, n));
+function clamp01(n: number): number {
+  return Math.max(0, Math.min(100, n));
+}
+
+function percentileScore(
+  actual: number,
+  p10: number,
+  p90: number,
+  invert: boolean,
+): number {
+  if (p90 <= p10) {
+    return NEUTRAL;
+  }
+  const raw = ((actual - p10) / (p90 - p10)) * 100;
+  const clamped = clamp01(raw);
+  return invert ? 100 - clamped : clamped;
+}
+
+function countKinds(amenities: Amenity[], kinds: string[]): number {
+  let n = 0;
+  for (const a of amenities) {
+    if (kinds.includes(a.kind)) n++;
+  }
+  return n;
+}
+
+function safeRound(n: number): number {
+  return Math.round(clamp01(n));
+}
+
+function pickBench(
+  key: 'restaurant' | 'cafe' | 'school' | 'grocery' | 'park' | 'transit' | 'construction' | 'permits500m' | 'complaints',
+) {
+  const m = BENCHMARKS.metrics[key];
+  return { p10: m.p10, p50: m.p50, p90: m.p90 };
 }
 
 export function computeBreakdown(
   amenities: Amenity[],
   permits: Permit[],
 ): ScoreBreakdown {
-  const restaurants = amenities.filter((a) => a.kind === 'restaurant').length;
-  const cafes = amenities.filter((a) => a.kind === 'cafe').length;
-  const schools = amenities.filter((a) => a.kind === 'school').length;
-  const groceries = amenities.filter((a) => a.kind === 'grocery').length;
-  const parks = amenities.filter((a) => a.kind === 'park').length;
-  const transitCount = amenities.filter(
-    (a) => a.kind === 'bus_stop' || a.kind === 'transit',
-  ).length;
-  const buildings = amenities.filter((a) => a.kind === 'construction').length;
-  const landuse = amenities.filter((a) => a.tags?.landuse === 'park').length;
-
-  const amenityPerKm2 = (restaurants + cafes + schools) / AREA_KM2;
-  const transitPerKm2 = transitCount / AREA_KM2;
-
-  const amenityDensity = clamp((amenityPerKm2 / 80) * 100);
-  const transitScore = clamp((transitPerKm2 / 40) * 100);
-
-  let foodAccess: number;
-  if (groceries === 0) foodAccess = 15;
-  else if (groceries === 1) foodAccess = 45;
-  else if (groceries === 2) foodAccess = 70;
-  else foodAccess = 95;
-
-  const greenNumerator = parks + landuse * 2;
-  const greenDenominator = greenNumerator + buildings * 0.5;
-  const greenSpace = clamp(
-    greenDenominator > 0 ? (greenNumerator / greenDenominator) * 100 : 35,
-  );
+  const restaurants = countKinds(amenities, ['restaurant']);
+  const cafes = countKinds(amenities, ['cafe']);
+  const schools = countKinds(amenities, ['school']);
+  const groceries = countKinds(amenities, ['grocery']);
+  const parks = countKinds(amenities, ['park']);
+  const transit = countKinds(amenities, ['bus_stop', 'transit']);
+  const construction = countKinds(amenities, ['construction']);
 
   const now = Date.now();
-  const sixMonthsMs = 1000 * 60 * 60 * 24 * 30 * 6;
   const recentPermits = permits.filter((p) => {
     const t = Date.parse(p.issuedDate);
-    return Number.isFinite(t) && now - t <= sixMonthsMs;
+    return Number.isFinite(t) && now - t <= SIX_MONTHS_MS;
   }).length;
 
+  const b = {
+    restaurant: pickBench('restaurant'),
+    cafe: pickBench('cafe'),
+    school: pickBench('school'),
+    grocery: pickBench('grocery'),
+    park: pickBench('park'),
+    transit: pickBench('transit'),
+    construction: pickBench('construction'),
+    permits: pickBench('permits500m'),
+  };
+
+  const amenityMix = restaurants + cafes + schools;
+  const amenityP10 = b.restaurant.p10 + b.cafe.p10 + b.school.p10;
+  const amenityP90 = b.restaurant.p90 + b.cafe.p90 + b.school.p90;
+  const amenityDensity = safeRound(
+    percentileScore(amenityMix, amenityP10, amenityP90, false),
+  );
+
+  const transitScore = safeRound(
+    percentileScore(transit, b.transit.p10, b.transit.p90, false),
+  );
+
+  const foodAccess = safeRound(
+    percentileScore(groceries, b.grocery.p10, b.grocery.p90, false),
+  );
+
+  const greenBase = safeRound(
+    percentileScore(parks, b.park.p10, b.park.p90, false),
+  );
+  const greenFloor = parks === 0 ? 15 : parks <= 2 ? 35 : 0;
+  const greenSpace = safeRound(Math.max(greenBase, greenFloor));
+
   let development: number;
-  if (recentPermits === 0) development = 30;
-  else if (recentPermits <= 3) development = 60;
-  else if (recentPermits <= 8) development = 85;
-  else if (recentPermits <= 15) development = 70;
-  else development = 45;
+  if (b.permits.p90 > b.permits.p10) {
+    const permitsScore = percentileScore(
+      recentPermits,
+      b.permits.p10,
+      b.permits.p90,
+      false,
+    );
+    const constructionScore = percentileScore(
+      construction,
+      b.construction.p10,
+      b.construction.p90,
+      false,
+    );
+    development = safeRound(permitsScore * 0.6 + constructionScore * 0.4);
+  } else {
+    development = safeRound(
+      percentileScore(construction, b.construction.p10, b.construction.p90, false),
+    );
+    if (development === NEUTRAL && construction === 0) {
+      development = 45;
+    }
+  }
 
   return {
-    amenityDensity: Math.round(amenityDensity),
-    transitScore: Math.round(transitScore),
-    foodAccess: Math.round(foodAccess),
-    greenSpace: Math.round(greenSpace),
-    development: Math.round(development),
+    amenityDensity,
+    transitScore,
+    foodAccess,
+    greenSpace,
+    development,
   };
 }
 
@@ -76,9 +139,23 @@ export function computeTotal(breakdown: ScoreBreakdown): LivabilityScore {
     breakdown.foodAccess * w.foodAccess +
     breakdown.greenSpace * w.greenSpace +
     breakdown.development * w.development;
+  const totalClamped = Math.round(clamp01(total));
   return {
-    total: Math.round(clamp(total)),
+    total: totalClamped,
     breakdown,
-    cityAverage: 60,
+    cityAverage: NEUTRAL,
+    ranking: computeRanking(totalClamped),
   };
+}
+
+export function computeRanking(score: number): Ranking {
+  const s = clamp01(score);
+  let label: string;
+  if (s >= 90) label = 'Top 10%';
+  else if (s >= 75) label = 'Top 25%';
+  else if (s >= 60) label = 'Above average';
+  else if (s >= 40) label = 'Average';
+  else if (s >= 25) label = 'Below average';
+  else label = 'Bottom 25%';
+  return { percentile: Math.round(s), label };
 }

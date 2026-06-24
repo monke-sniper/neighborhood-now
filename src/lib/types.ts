@@ -65,6 +65,12 @@ export interface LivabilityScore {
   total: number;
   breakdown: ScoreBreakdown;
   cityAverage: number;
+  ranking: Ranking;
+}
+
+export interface Ranking {
+  percentile: number;
+  label: string;
 }
 
 export interface Signal {
@@ -91,6 +97,12 @@ export interface Trend {
   forecast24m: number;
   r2: number;
   confidence: 'high' | 'medium' | 'low';
+  method?: 'ewma' | 'ols' | 'flat';
+  band?: {
+    forecast6m: { value: number; low: number; high: number };
+    forecast12m: { value: number; low: number; high: number };
+    forecast24m: { value: number; low: number; high: number };
+  };
 }
 
 export interface Scenario {
@@ -98,7 +110,13 @@ export interface Scenario {
   name: string;
   emoji: string;
   description: string;
-  impact: Partial<ScoreBreakdown>;
+  impact: {
+    amenityDensity?: number | ((current: ScoreBreakdown) => number);
+    transitScore?: number | ((current: ScoreBreakdown) => number);
+    foodAccess?: number | ((current: ScoreBreakdown) => number);
+    greenSpace?: number | ((current: ScoreBreakdown) => number);
+    development?: number | ((current: ScoreBreakdown) => number);
+  };
 }
 
 export interface ScenarioResult {

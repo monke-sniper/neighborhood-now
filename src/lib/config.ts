@@ -1,13 +1,19 @@
 export const CONFIG = {
   overpass: {
     url: 'https://overpass-api.de/api/interpreter',
+    mirrors: [
+      'https://overpass-api.de/api/interpreter',
+      'https://overpass.kumi.systems/api/interpreter',
+      'https://overpass.private.coffee/api/interpreter',
+    ],
     radiusMeters: 1500,
     timeoutSec: 25,
+    userAgent: 'NeighborhoodNow/1.0 (hackathon; contact: hello@neighborhood.now)',
   },
   builddata: {
     url: 'https://api.builddata.ca/permit/export',
     municipality: 'toronto',
-    radiusMeters: 500,
+    radiusMeters: 1500,
   },
   nominatim: {
     url: 'https://nominatim.openstreetmap.org/search',
