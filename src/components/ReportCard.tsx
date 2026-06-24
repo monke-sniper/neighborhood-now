@@ -5,89 +5,132 @@ interface Props {
 }
 
 const LABELS: Record<keyof NeighborhoodReport['score']['breakdown'], string> = {
-  amenityDensity: 'Amenity density',
-  transitScore: 'Transit access',
-  foodAccess: 'Food access',
-  greenSpace: 'Green space',
-  development: 'Development activity',
+  amenityDensity: 'AMENITY DENSITY',
+  transitScore: 'TRANSIT ACCESS',
+  foodAccess: 'FOOD ACCESS',
+  greenSpace: 'GREEN SPACE',
+  development: 'DEVELOPMENT',
 };
 
 function colorFor(score: number): string {
-  if (score >= 75) return 'text-emerald-400';
-  if (score >= 50) return 'text-amber-300';
-  return 'text-rose-400';
+  if (score >= 75) return 'text-[var(--color-accent)]';
+  if (score >= 50) return 'text-[var(--color-warn)]';
+  return 'text-[var(--color-bad)]';
+}
+
+function barColorFor(score: number): string {
+  if (score >= 75) return 'bg-[var(--color-accent)]';
+  if (score >= 50) return 'bg-[var(--color-warn)]';
+  return 'bg-[var(--color-bad)]';
 }
 
 export function ReportCard({ report }: Props) {
   const { score, amenities, permits, complaints, sources } = report;
-  const rest = amenities.amenities.filter((a) => a.kind === 'restaurant').length;
-  const cafes = amenities.amenities.filter((a) => a.kind === 'cafe').length;
-  const schools = amenities.amenities.filter((a) => a.kind === 'school').length;
-  const groceries = amenities.amenities.filter((a) => a.kind === 'grocery').length;
-  const parks = amenities.amenities.filter((a) => a.kind === 'park').length;
-  const transit = amenities.transit.length + amenities.amenities.filter(
-    (a) => a.kind === 'bus_stop' || a.kind === 'transit',
-  ).length;
+  const counts = {
+    restaurants: amenities.amenities.filter((a) => a.kind === 'restaurant').length,
+    cafes: amenities.amenities.filter((a) => a.kind === 'cafe').length,
+    schools: amenities.amenities.filter((a) => a.kind === 'school').length,
+    groceries: amenities.amenities.filter((a) => a.kind === 'grocery').length,
+    parks: amenities.amenities.filter((a) => a.kind === 'park').length,
+    transit:
+      amenities.amenities.filter(
+        (a) => a.kind === 'bus_stop' || a.kind === 'transit',
+      ).length + amenities.transit.length,
+  };
 
   return (
-    <div className="flex flex-col gap-4 p-4 rounded border border-zinc-800 bg-zinc-900/50">
-      <div className="flex items-baseline justify-between">
-        <h2 className="text-sm uppercase tracking-widest text-zinc-400">
-          Livability score
+    <div className="flex flex-col gap-4 p-4 border border-[var(--color-border)] bg-[var(--color-surface)]">
+      <div className="flex items-center justify-between border-b border-[var(--color-border)] pb-2">
+        <h2 className="text-xs uppercase tracking-widest text-[var(--color-accent)] font-semibold">
+          [ LIVABILITY SCORE ]
         </h2>
-        <div className="text-xs text-zinc-500">
-          City avg {score.cityAverage}
+        <div className="text-[10px] text-[var(--color-text-mute)] uppercase tracking-wider">
+          CITY_AVG {score.cityAverage}
         </div>
       </div>
 
-      <div className="flex items-baseline gap-2">
-        <div className={`text-5xl font-bold ${colorFor(score.total)}`}>
+      <div className="flex items-baseline gap-3">
+        <div className={`text-6xl font-bold ${colorFor(score.total)} tabular-nums leading-none`}>
           {score.total}
         </div>
-        <div className="text-zinc-500 text-lg">/ 100</div>
+        <div className="text-[var(--color-text-mute)] text-sm">/100</div>
+        <div className="ml-auto text-right">
+          <div className="text-[10px] text-[var(--color-text-mute)] uppercase tracking-widest">
+            RANK
+          </div>
+          <div className={`text-sm font-semibold ${colorFor(score.total)} uppercase`}>
+            {score.ranking.label}
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-2">
+      <div className="flex flex-col gap-2">
         {Object.entries(score.breakdown).map(([k, v]) => {
           const key = k as keyof typeof score.breakdown;
           return (
-            <div key={k} className="flex items-center gap-3 text-sm">
-              <div className="w-32 text-zinc-400">{LABELS[key]}</div>
-              <div className="flex-1 h-2 bg-zinc-800 rounded overflow-hidden">
+            <div key={k} className="flex items-center gap-3 text-xs">
+              <div className="w-32 text-[var(--color-text-dim)] uppercase tracking-wider truncate">
+                {LABELS[key]}
+              </div>
+              <div className="flex-1 h-1.5 bg-[var(--color-surface-3)] overflow-hidden">
                 <div
-                  className={`h-full ${v >= 75 ? 'bg-emerald-500' : v >= 50 ? 'bg-amber-400' : 'bg-rose-500'}`}
+                  className={`h-full ${barColorFor(v)} transition-all`}
                   style={{ width: `${v}%` }}
                 />
               </div>
-              <div className="w-10 text-right text-zinc-300 tabular-nums">
-                {v}
+              <div className="w-10 text-right text-[var(--color-text)] tabular-nums">
+                {String(v).padStart(3, '0')}
               </div>
             </div>
           );
         })}
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm pt-2 border-t border-zinc-800">
-        <div><span className="text-zinc-500">Restaurants</span> <span className="float-right text-zinc-200">{rest}</span></div>
-        <div><span className="text-zinc-500">Cafés</span> <span className="float-right text-zinc-200">{cafes}</span></div>
-        <div><span className="text-zinc-500">Schools</span> <span className="float-right text-zinc-200">{schools}</span></div>
-        <div><span className="text-zinc-500">Grocery</span> <span className="float-right text-zinc-200">{groceries}</span></div>
-        <div><span className="text-zinc-500">Parks</span> <span className="float-right text-zinc-200">{parks}</span></div>
-        <div><span className="text-zinc-500">Transit</span> <span className="float-right text-zinc-200">{transit}</span></div>
-        <div><span className="text-zinc-500">Permits (500m)</span> <span className="float-right text-amber-300">{permits.length}</span></div>
-        <div><span className="text-zinc-500">Complaints</span> <span className="float-right text-rose-300">{complaints.length}</span></div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 text-xs pt-2 border-t border-[var(--color-border)]">
+        <div className="flex justify-between">
+          <span className="text-[var(--color-text-mute)]">RESTAURANTS</span>
+          <span className="text-[var(--color-text)] tabular-nums">{counts.restaurants}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-[var(--color-text-mute)]">CAFÉS</span>
+          <span className="text-[var(--color-text)] tabular-nums">{counts.cafes}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-[var(--color-text-mute)]">SCHOOLS</span>
+          <span className="text-[var(--color-text)] tabular-nums">{counts.schools}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-[var(--color-text-mute)]">GROCERY</span>
+          <span className="text-[var(--color-text)] tabular-nums">{counts.groceries}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-[var(--color-text-mute)]">PARKS</span>
+          <span className="text-[var(--color-text)] tabular-nums">{counts.parks}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-[var(--color-text-mute)]">TRANSIT</span>
+          <span className="text-[var(--color-text)] tabular-nums">{counts.transit}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-[var(--color-text-mute)]">PERMITS</span>
+          <span className="text-[var(--color-warn)] tabular-nums">{permits.length}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-[var(--color-text-mute)]">COMPLAINTS</span>
+          <span className="text-[var(--color-bad)] tabular-nums">{complaints.length}</span>
+        </div>
       </div>
 
-      <div className="text-[10px] text-zinc-600 flex flex-wrap gap-2 pt-1 border-t border-zinc-800">
-        <span>OSM {sources.overpass}</span>
-        <span>·</span>
-        <span>Permits {sources.builddata}</span>
-        <span>·</span>
-        <span>311 {sources.complaints}</span>
-        <span>·</span>
-        <span>Census {sources.census}</span>
-        <span>·</span>
-        <span>Air {sources.weather}</span>
+      <div className="text-[10px] text-[var(--color-text-mute)] flex flex-wrap gap-x-2 gap-y-1 pt-2 border-t border-[var(--color-border)] uppercase tracking-wider">
+        <span>OSM [{sources.overpass.toUpperCase()}]</span>
+        <span className="text-[var(--color-text-mute)]">·</span>
+        <span>PERMITS [{sources.builddata.toUpperCase()}]</span>
+        <span className="text-[var(--color-text-mute)]">·</span>
+        <span>311 [{sources.complaints.toUpperCase()}]</span>
+        <span className="text-[var(--color-text-mute)]">·</span>
+        <span>CENSUS [{sources.census.toUpperCase()}]</span>
+        <span className="text-[var(--color-text-mute)]">·</span>
+        <span>AIR [{sources.weather.toUpperCase()}]</span>
       </div>
     </div>
   );

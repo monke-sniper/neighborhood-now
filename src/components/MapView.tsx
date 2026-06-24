@@ -8,7 +8,11 @@ interface Props {
   permits: Permit[];
 }
 
-const STYLE_URL = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
+const STYLE_URL =
+  'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
+
+const ACCENT = '#5eead4';
+const WARN = '#fbbf24';
 
 export function MapView({ coords, permits }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -37,16 +41,14 @@ export function MapView({ coords, permits }: Props) {
 
       map.on('load', () => {
         const pin = document.createElement('div');
-        pin.style.cssText =
-          'width:18px;height:18px;background:#10b981;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 4px rgba(16,185,129,0.25);';
+        pin.style.cssText = `width:14px;height:14px;background:${ACCENT};border:2px solid #000;box-shadow:0 0 0 3px ${ACCENT}40,0 0 12px ${ACCENT}80;`;
         new maplibregl.Marker({ element: pin })
           .setLngLat([coords.lon, coords.lat])
           .addTo(map);
 
         for (const p of permits.slice(0, 200)) {
           const el = document.createElement('div');
-          el.style.cssText =
-            'width:8px;height:8px;background:#f59e0b;border-radius:50%;opacity:0.85;';
+          el.style.cssText = `width:6px;height:6px;background:${WARN};border:1px solid #000;opacity:0.9;`;
           new maplibregl.Marker({ element: el })
             .setLngLat([p.lon, p.lat])
             .addTo(map);
@@ -65,9 +67,14 @@ export function MapView({ coords, permits }: Props) {
   }, [coords.lat, coords.lon, permits]);
 
   return (
-    <div
-      ref={containerRef}
-      className="w-full h-80 rounded border border-zinc-800 overflow-hidden bg-zinc-900"
-    />
+    <div className="relative w-full h-80 border border-[var(--color-border)] bg-black overflow-hidden">
+      <div className="absolute top-2 left-2 z-10 text-[10px] uppercase tracking-widest text-[var(--color-accent)] bg-black/80 px-2 py-1 border border-[var(--color-border)] pointer-events-none">
+        [ MAP // {coords.lat.toFixed(4)}, {coords.lon.toFixed(4)} ]
+      </div>
+      <div
+        ref={containerRef}
+        className="w-full h-full"
+      />
+    </div>
   );
 }

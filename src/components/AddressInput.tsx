@@ -38,24 +38,29 @@ export function AddressInput({ onReport }: Props) {
   return (
     <form onSubmit={submit} className="flex flex-col gap-2 w-full">
       <div className="flex gap-2">
+        <span className="text-[var(--color-accent)] text-xs flex items-center pr-1 select-none">
+          &gt;_
+        </span>
         <input
           type="text"
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          placeholder="Type an address — e.g. 123 Queen St W, Toronto"
-          className="flex-1 px-4 py-2 rounded bg-zinc-900 border border-zinc-700 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-emerald-500"
+          placeholder="ENTER ADDRESS — e.g. 123 QUEEN ST W, TORONTO"
+          className="flex-1 px-3 py-2 bg-black border border-[var(--color-border)] text-[var(--color-text)] text-sm placeholder:text-[var(--color-text-mute)] focus:outline-none focus:border-[var(--color-accent)] focus:shadow-[0_0_8px_rgba(94,234,212,0.25)] transition uppercase tracking-wide"
           disabled={loading}
         />
         <button
           type="submit"
           disabled={loading || !value.trim()}
-          className="px-5 py-2 rounded bg-emerald-500 text-zinc-950 font-medium hover:bg-emerald-400 disabled:bg-zinc-700 disabled:text-zinc-500 transition"
+          className="px-5 py-2 bg-[var(--color-accent)] text-black text-xs font-semibold uppercase tracking-widest hover:bg-[var(--color-accent-dim)] disabled:bg-[var(--color-surface-3)] disabled:text-[var(--color-text-mute)] transition"
         >
-          {loading ? 'Loading…' : 'Analyze'}
+          {loading ? '[ FETCHING… ]' : '[ ANALYZE ]'}
         </button>
       </div>
       {error && (
-        <div className="text-sm text-rose-400 px-1">{error}</div>
+        <div className="text-xs text-[var(--color-bad)] px-1 uppercase tracking-wider">
+          [ ERR ] {error}
+        </div>
       )}
     </form>
   );

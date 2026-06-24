@@ -8,6 +8,12 @@ interface Props {
   current: ScoreBreakdown;
 }
 
+function deltaColor(delta: number): string {
+  if (delta > 0) return 'text-[var(--color-accent)]';
+  if (delta < 0) return 'text-[var(--color-bad)]';
+  return 'text-[var(--color-text-mute)]';
+}
+
 export function WhatIfSimulator({ current }: Props) {
   const [active, setActive] = useState<Set<string>>(new Set());
 
@@ -20,10 +26,10 @@ export function WhatIfSimulator({ current }: Props) {
       const r = simulateWhatIf(modified, scenario);
       modified = r.modifiedBreakdown;
     }
-    const before = simulateWhatIf(current, SCENARIOS[0]!).before;
-    const after = simulateWhatIf(modified, SCENARIOS[0]!).after;
-    void before;
-    return { after, delta: after - simulateWhatIf(current, SCENARIOS[0]!).before };
+    const baseScenario = SCENARIOS[0]!;
+    const before = simulateWhatIf(current, baseScenario).before;
+    const after = simulateWhatIf(modified, baseScenario).after;
+    return { after, delta: after - before };
   }, [active, current]);
 
   function toggle(id: string) {
@@ -36,19 +42,19 @@ export function WhatIfSimulator({ current }: Props) {
   }
 
   return (
-    <div className="flex flex-col gap-2 p-4 rounded border border-zinc-800 bg-zinc-900/50">
-      <div className="flex items-baseline justify-between">
-        <h2 className="text-sm uppercase tracking-widest text-zinc-400">
-          What if…
+    <div className="flex flex-col gap-2 p-4 border border-[var(--color-border)] bg-[var(--color-surface)]">
+      <div className="flex items-center justify-between border-b border-[var(--color-border)] pb-2">
+        <h2 className="text-xs uppercase tracking-widest text-[var(--color-accent)] font-semibold">
+          [ WHAT-IF // SIMULATE ]
         </h2>
-        {result && (
-          <div
-            className={`text-sm font-bold ${
-              result.delta > 0 ? 'text-emerald-400' : 'text-rose-400'
-            }`}
-          >
+        {result ? (
+          <div className={`text-sm font-bold ${deltaColor(result.delta)} tabular-nums`}>
             {result.delta > 0 ? '+' : ''}
-            {result.delta} pts
+            {result.delta} PTS
+          </div>
+        ) : (
+          <div className="text-[10px] text-[var(--color-text-mute)] uppercase tracking-wider">
+            CLICK TO STACK
           </div>
         )}
       </div>
@@ -61,21 +67,29 @@ export function WhatIfSimulator({ current }: Props) {
               key={s.id}
               type="button"
               onClick={() => toggle(s.id)}
-              className={`text-left p-3 rounded border transition ${
+              className={`text-left p-3 border transition ${
                 on
-                  ? 'border-emerald-500 bg-emerald-950/40'
-                  : 'border-zinc-800 bg-zinc-950/40 hover:border-zinc-600'
+                  ? 'border-[var(--color-accent)] bg-[#0a1a17]'
+                  : 'border-[var(--color-border)] bg-black hover:border-[var(--color-border-strong)]'
               }`}
             >
-              <div className="flex items-center gap-2 text-sm font-medium text-zinc-200">
-                <span className="text-lg">{s.emoji}</span>
-                {s.name}
-                <span className="ml-auto text-xs text-emerald-400">
+              <div className="flex items-center gap-2 text-xs font-medium text-[var(--color-text)]">
+                <span className={`text-[10px] px-1.5 py-0.5 font-bold border ${
+                  on
+                    ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
+                    : 'border-[var(--color-border-strong)] text-[var(--color-text-mute)]'
+                }`}>
+                  {s.emoji}
+                </span>
+                <span className="uppercase tracking-wide">{s.name}</span>
+                <span className={`ml-auto text-xs ${deltaColor(single.delta)} tabular-nums`}>
                   {single.delta > 0 ? '+' : ''}
                   {single.delta}
                 </span>
               </div>
-              <div className="text-xs text-zinc-500 mt-1">{s.description}</div>
+              <div className="text-[10px] text-[var(--color-text-mute)] mt-1 uppercase tracking-wider">
+                {s.description}
+              </div>
             </button>
           );
         })}

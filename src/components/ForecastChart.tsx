@@ -23,6 +23,8 @@ const HORIZONS: Array<{ key: 'current' | 'forecast6m' | 'forecast12m' | 'forecas
   { key: 'forecast24m', label: '+24m' },
 ];
 
+const COLORS = ['#5eead4', '#fbbf24', '#a78bfa', '#f472b6', '#34d399'];
+
 export function ForecastChart({ trends }: Props) {
   const data = useMemo(() => {
     if (trends.length === 0) return [] as Array<Record<string, number | string>>;
@@ -37,29 +39,29 @@ export function ForecastChart({ trends }: Props) {
 
   if (trends.length === 0) {
     return (
-      <div className="p-4 rounded border border-zinc-800 bg-zinc-900/50 text-sm text-zinc-500">
-        Not enough history yet to forecast trends.
+      <div className="p-4 border border-[var(--color-border)] bg-[var(--color-surface)] text-xs text-[var(--color-text-mute)] uppercase tracking-wider">
+        [ INSUFFICIENT HISTORY // NEED AT LEAST 3 MONTHS OF DATA ]
       </div>
     );
   }
 
-  const colors = ['#10b981', '#f59e0b', '#60a5fa', '#a78bfa', '#f472b6'];
-
   return (
-    <div className="flex flex-col gap-2 p-4 rounded border border-zinc-800 bg-zinc-900/50">
-      <div className="flex items-baseline justify-between">
-        <h2 className="text-sm uppercase tracking-widest text-zinc-400">
-          2-year forecast
+    <div className="flex flex-col gap-2 p-4 border border-[var(--color-border)] bg-[var(--color-surface)]">
+      <div className="flex items-center justify-between border-b border-[var(--color-border)] pb-2">
+        <h2 className="text-xs uppercase tracking-widest text-[var(--color-accent)] font-semibold">
+          [ 2-YEAR FORECAST ]
         </h2>
-        <div className="flex flex-wrap gap-3 text-xs text-zinc-400">
+        <div className="flex flex-wrap gap-3 text-[10px] text-[var(--color-text-dim)] uppercase tracking-wider">
           {trends.map((t, i) => (
             <span key={t.signal} className="flex items-center gap-1">
               <span
-                className="inline-block w-3 h-1"
-                style={{ background: colors[i % colors.length] }}
+                className="inline-block w-3 h-0.5"
+                style={{ background: COLORS[i % COLORS.length] }}
               />
               {t.signal}
-              <span className="text-zinc-600">({t.confidence})</span>
+              <span className="text-[var(--color-text-mute)]">
+                ({t.method ?? 'flat'} · {t.confidence})
+              </span>
             </span>
           ))}
         </div>
@@ -67,25 +69,39 @@ export function ForecastChart({ trends }: Props) {
       <div className="h-56">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
-            <CartesianGrid stroke="#27272a" strokeDasharray="3 3" />
-            <XAxis dataKey="horizon" stroke="#71717a" fontSize={12} />
-            <YAxis stroke="#71717a" fontSize={12} />
+            <CartesianGrid stroke="#1f1f1f" strokeDasharray="3 3" />
+            <XAxis
+              dataKey="horizon"
+              stroke="#555"
+              fontSize={10}
+              tickLine={false}
+              axisLine={{ stroke: '#1f1f1f' }}
+            />
+            <YAxis
+              stroke="#555"
+              fontSize={10}
+              tickLine={false}
+              axisLine={{ stroke: '#1f1f1f' }}
+            />
             <Tooltip
               contentStyle={{
-                background: '#18181b',
-                border: '1px solid #3f3f46',
-                fontSize: 12,
+                background: '#000',
+                border: '1px solid #5eead4',
+                fontSize: 11,
+                fontFamily: 'var(--font-mono)',
               }}
-              labelStyle={{ color: '#a1a1aa' }}
+              labelStyle={{ color: '#5eead4', textTransform: 'uppercase' }}
+              itemStyle={{ color: '#ededed' }}
             />
             {trends.map((t, i) => (
               <Line
                 key={t.signal}
                 type="monotone"
                 dataKey={t.signal}
-                stroke={colors[i % colors.length]}
-                strokeWidth={2}
-                dot={{ r: 3 }}
+                stroke={COLORS[i % COLORS.length]}
+                strokeWidth={1.5}
+                dot={{ r: 2, fill: COLORS[i % COLORS.length] }}
+                activeDot={{ r: 4 }}
               />
             ))}
           </LineChart>
