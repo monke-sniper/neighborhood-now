@@ -5,14 +5,16 @@ import { fetchPermits } from '@/lib/api/builddata';
 import { fetchComplaints } from '@/lib/api/complaints';
 import { fetchCensus } from '@/lib/api/census';
 import { fetchAirQuality } from '@/lib/api/weather';
-import { computeBreakdown, computeTotal } from '@/lib/engine/score';
+import { computeBreakdown, computeTotal, analyzeSchools } from '@/lib/engine/score';
 import { detectAnomalies, type AnomalyContext } from '@/lib/engine/anomalies';
 import { forecastTrend } from '@/lib/engine/forecast';
 import { explainAll } from '@/lib/engine/explain';
+import { lastNMonths, seriesFromDates, countWithinDays } from '@/lib/engine/timeseries';
 import { log } from '@/lib/logger';
 import { TTLCache } from '@/lib/utils/cache';
 import { CONFIG, parseRadius } from '@/lib/config';
 import { BENCHMARKS } from '@/lib/engine/benchmarks';
+import { buildSyntheticReport } from '@/lib/synthetic';
 import type { NeighborhoodReport } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -20,35 +22,10 @@ export const maxDuration = 10;
 
 const ROUTE_DEADLINE_MS = 9500;
 
-const reportCache = new TTLCache<string, NeighborhoodReport>();
+const reportCache = new TTLCache<string, NeighborhoodReport>({ maxEntries: 200 });
 
 function normalizeAddress(a: string): string {
   return a.trim().toLowerCase().replace(/\s+/g, ' ');
-}
-
-function monthKey(d: Date): string {
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
-}
-
-function lastNMonths(n: number, from = new Date()): string[] {
-  const out: string[] = [];
-  for (let i = n - 1; i >= 0; i--) {
-    const d = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth() - i, 1));
-    out.push(monthKey(d));
-  }
-  return out;
-}
-
-function seriesFromDates(dates: string[], months: string[]): number[] {
-  const counts = new Map<string, number>();
-  for (const m of months) counts.set(m, 0);
-  for (const d of dates) {
-    const t = Date.parse(d);
-    if (!Number.isFinite(t)) continue;
-    const k = monthKey(new Date(t));
-    if (counts.has(k)) counts.set(k, (counts.get(k) ?? 0) + 1);
-  }
-  return months.map((m) => counts.get(m) ?? 0);
 }
 
 type TimedResult<T> =
@@ -78,16 +55,28 @@ export async function GET(req: Request): Promise<NextResponse> {
   const url = new URL(req.url);
   const address = url.searchParams.get('address')?.trim();
   const debug = url.searchParams.get('debug') === '1';
+  const synth = url.searchParams.get('synth') === '1';
   const radius = parseRadius(url.searchParams.get('radius'));
   if (!address) {
     return NextResponse.json({ error: 'Missing ?address=' }, { status: 400 });
+  }
+
+  if (synth) {
+    const report = buildSyntheticReport(address, radius, debug);
+    if (!report) {
+      return NextResponse.json(
+        { error: `No synthetic data for "${address}"` },
+        { status: 404 },
+      );
+    }
+    return NextResponse.json(report);
   }
 
   const cacheKey = `${normalizeAddress(address)}|${radius}`;
   if (!debug) {
     const hit = reportCache.get(cacheKey);
     if (hit) {
-      log.debug('report.cache_hit', { address: cacheKey });
+      log.info('report.cache_hit', { address: cacheKey });
       return NextResponse.json(hit);
     }
   }
@@ -180,12 +169,20 @@ export async function GET(req: Request): Promise<NextResponse> {
       fellBack: oValue.fellBack,
     });
 
-    const computed = computeBreakdown(amenities.amenities, permits, radius);
+    const nowMs = Date.now();
+    const computed = computeBreakdown(amenities.amenities, permits, radius, { nowMs });
     const breakdown = computed.breakdown;
     const score = computeTotal(breakdown, { presence: computed.presence });
-    const explanations = explainAll(score, amenities.amenities, permits, radius);
+    const explanations = explainAll(score, amenities.amenities, permits, radius, { nowMs });
+    const schoolAnalysis = analyzeSchools(
+      amenities.amenities,
+      permits,
+      radius,
+      { lat: geo.lat, lon: geo.lon },
+      { nowMs },
+    );
 
-    const months = lastNMonths(12);
+    const months = lastNMonths(12).map((m) => m.key);
     const permitsByMonth = seriesFromDates(
       permits.map((p) => p.issuedDate),
       months,
@@ -199,17 +196,26 @@ export async function GET(req: Request): Promise<NextResponse> {
     const complaintsTrend = forecastTrend(complaintsByMonth, '311 complaints');
     const trends = [permitsTrend, complaintsTrend];
 
-    const nowMs = Date.now();
-    const sixMonthsMs = 1000 * 60 * 60 * 24 * 30 * 6;
-    const ninetyDaysMs = 1000 * 60 * 60 * 24 * 90;
-    const permitsLast6m = permits.filter((p) => {
-      const t = Date.parse(p.issuedDate);
-      return Number.isFinite(t) && nowMs - t <= sixMonthsMs;
-    }).length;
-    const complaintsLast90d = complaints.filter((cc) => {
-      const t = Date.parse(cc.date);
-      return Number.isFinite(t) && nowMs - t <= ninetyDaysMs;
-    }).length;
+    const permitsLast30d = countWithinDays(
+      permits.map((p) => p.issuedDate),
+      30,
+      nowMs,
+    );
+    const permitsLast6m = countWithinDays(
+      permits.map((p) => p.issuedDate),
+      30 * 6,
+      nowMs,
+    );
+    const complaintsLast30d = countWithinDays(
+      complaints.map((c) => c.date),
+      30,
+      nowMs,
+    );
+    const complaintsLast90d = countWithinDays(
+      complaints.map((c) => c.date),
+      90,
+      nowMs,
+    );
 
     const amenityCounts = {
       restaurant: computed.counts.restaurants,
@@ -222,7 +228,9 @@ export async function GET(req: Request): Promise<NextResponse> {
     };
 
     const anomalyCtx: AnomalyContext = {
+      permitsLast30d,
       permitsLast6m,
+      complaintsLast30d,
       complaintsLast90d,
       amenityCounts,
       scoreBreakdown: breakdown,
@@ -254,6 +262,7 @@ export async function GET(req: Request): Promise<NextResponse> {
       },
       errors: errorMap,
       benchmarksCapturedAt: BENCHMARKS.capturedAt,
+      schoolImpacts: schoolAnalysis.impacts,
     };
 
     if (debug) {
@@ -332,7 +341,7 @@ export async function GET(req: Request): Promise<NextResponse> {
     reportCache.set(cacheKey, report, CONFIG.cache.reportTtlMs);
     return NextResponse.json(report);
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    return NextResponse.json({ error: message }, { status: 500 });
+    log.error('report.failed', { error: err instanceof Error ? err.message : String(err) });
+    return NextResponse.json({ error: 'Internal report error' }, { status: 500 });
   }
 }

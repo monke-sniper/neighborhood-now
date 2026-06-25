@@ -1,16 +1,23 @@
 {
-  "name": "nn",
-  "version": "0.1.0",
+  "name": "neighborhood-now",
+  "version": "1.0.0",
   "private": true,
+  "description": "Type an address. See what is happening. Know where it is going. FutureHacks 2026.",
+  "author": "monke-sniper",
+  "license": "UNLICENSED",
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/dev.mjs --port 3000",
+    "dev:3000": "node scripts/dev.mjs --port 3000",
+    "dev:3030": "node scripts/dev.mjs --port 3030",
+    "dev:clean": "node scripts/dev.mjs --port 3000",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
     "calibrate": "node scripts/calibrate.mjs",
-    "verify": "node scripts/verify.mjs"
+    "verify": "node scripts/verify.mjs",
+    "regen:corpus": "node scripts/regen-corpus.mjs"
   },
   "dependencies": {
     "maplibre-gl": "^5.0.0",
@@ -21,13 +28,17 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitest/coverage-v8": "^4.1.9",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
+    "happy-dom": "^15.11.7",
     "playwright": "^1.61.1",
+    "react-test-renderer": "^19.2.7",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.9"
