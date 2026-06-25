@@ -1,0 +1,45 @@
+name: Bug report
+description: Report broken behavior or unexpected output.
+labels: ["bug", "triage"]
+body:
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: How bad is the impact?
+      options:
+        - "Critical — service is unusable"
+        - "High — major feature broken"
+        - "Medium — feature degraded but workaround exists"
+        - "Low — cosmetic / minor"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: What did you do? What did you expect? What happened instead?
+      placeholder: |
+        1. Go to http://localhost:3000/?a=CN+Tower
+        2. Click [ANALYZE]
+        3. Observe the score panel
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      validations:
+      required: false
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      description: "Browser / OS / commit SHA if known"
+      placeholder: "Chrome 124 / macOS 14.4 / commit abc1234"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console / network logs
+      description: "Paste relevant `console.log`, network responses, or stack traces."
+      render: shell

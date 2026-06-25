@@ -1,0 +1,32 @@
+version: 2
+
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    groups:
+      production-dependencies:
+        dependency-type: "production"
+      development-dependencies:
+        dependency-type: "development"
+    labels:
+      - "dependencies"
+      - "automated"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    # Auto-merge patch updates for green CI; majors still need human review.
+    # (Auto-merge requires branch protection + a passing CI workflow.)
+    ignore:
+      - dependency-name: "next"
+        # Next.js majors ship breaking changes; require manual review.
+        versions:
+          - ">= 17.0.0"
+      - dependency-name: "react"
+        versions:
+          - ">= 20.0.0"

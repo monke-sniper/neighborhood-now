@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Type-check, lint, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test with coverage
+        run: npx vitest run --coverage --reporter=json-summary --reporter=text
+
+      - name: Coverage gate
+        run: |
+          node -e "
+            const fs = require('fs');
+            const c = JSON.parse(fs.readFileSync('coverage/coverage-summary.json', 'utf8')).total;
+            const lines = c.lines.pct;
+            const funcs = c.functions.pct;
+            console.log('Coverage:', JSON.stringify(c, null, 2));
+            if (lines < 70) { console.error('Coverage gate failed: lines', lines, '< 70'); process.exit(1); }
+            if (funcs < 65) { console.error('Coverage gate failed: functions', funcs, '< 65'); process.exit(1); }
+            console.log('Coverage gate passed: lines=' + lines + '% functions=' + funcs + '%');
+          "
+
+      - name: Build
+        run: npm run build
+
+      - name: Smoke test (production server)
+        run: |
+          (npm start &) && sleep 8 && \
+          curl -fsS -o /dev/null -w "GET / -> %{http_code}\n" http://localhost:3000/ && \
+          curl -fsS -o /dev/null -w "GET /api/health -> %{http_code}\n" http://localhost:3000/api/health && \
+          curl -fsS -o /dev/null -w "GET /api/report?address=CN%20Tower&synth=1 -> %{http_code}\n" "http://localhost:3000/api/report?address=CN%20Tower&synth=1" || \
+          (echo "Smoke test failed" && exit 1)
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 7
+          if-no-files-found: ignore
