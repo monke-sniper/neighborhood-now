@@ -11,19 +11,18 @@ function zscore(current: number, baseline: number): number {
   return (current - baseline) / Math.sqrt(baseline);
 }
 
-function signalFromScore(
-  name: string,
-  current: number,
-  benchmarkP50: number,
-  unit: string,
-): Signal {
-  return { name, current, baseline: benchmarkP50, unit };
-}
-
 function signalFromAmenity(
   name: string,
   current: number,
-  benchmarkKey: 'restaurant' | 'cafe' | 'school' | 'grocery' | 'park' | 'transit' | 'construction' | 'complaints',
+  benchmarkKey:
+    | 'restaurant'
+    | 'cafe'
+    | 'school'
+    | 'grocery'
+    | 'park'
+    | 'transit'
+    | 'construction'
+    | 'complaints',
   unit: string,
 ): Signal {
   const b = BENCHMARKS.metrics[benchmarkKey];
@@ -51,7 +50,11 @@ function buildMessage(s: Signal, z: number): string {
   return `${s.name} is ${sev} ${direction} normal: ${s.current} ${s.unit} (baseline ${Math.round(s.baseline)} ${s.unit}, ${z.toFixed(1)}σ)`;
 }
 
-function detectOne(s: Signal, out: Anomaly[]): void {
+function detectOne(
+  s: Signal,
+  out: Anomaly[],
+  category: Anomaly['category'],
+): void {
   const z = zscore(s.current, s.baseline);
   const absZ = Math.abs(z);
   const sev = severityFor(absZ);
@@ -61,11 +64,14 @@ function detectOne(s: Signal, out: Anomaly[]): void {
     zscore: z,
     severity: sev,
     message: buildMessage(s, z),
+    category,
   });
 }
 
 export interface AnomalyContext {
+  permitsLast30d: number;
   permitsLast6m: number;
+  complaintsLast30d: number;
   complaintsLast90d: number;
   amenityCounts: {
     restaurant: number;
@@ -84,55 +90,103 @@ export interface AnomalyContext {
 
 export function detectAnomalies(ctx: AnomalyContext): Anomaly[] {
   const r = radiusLabel(ctx.radiusMeters ?? 3000);
-  const signals: Signal[] = [
-    signalFromScore('Overall livability', ctx.scoreBreakdown.amenityDensity, BENCHMARKS.metrics.restaurant.p50, 'pts'),
-    signalFromScore('Transit access', ctx.scoreBreakdown.transitScore, BENCHMARKS.metrics.transit.p50, 'pts'),
-    signalFromScore('Food access', ctx.scoreBreakdown.foodAccess, BENCHMARKS.metrics.grocery.p50, 'pts'),
-    signalFromScore('Green space', ctx.scoreBreakdown.greenSpace, BENCHMARKS.metrics.park.p50, 'pts'),
-    signalFromScore('Development activity', ctx.scoreBreakdown.development, BENCHMARKS.metrics.construction.p50, 'pts'),
-    signalFromAmenity(`Restaurants in ${r}`, ctx.amenityCounts.restaurant, 'restaurant', 'places'),
-    signalFromAmenity(`Cafés in ${r}`, ctx.amenityCounts.cafe, 'cafe', 'places'),
-    signalFromAmenity(`Schools in ${r}`, ctx.amenityCounts.school, 'school', 'places'),
-    signalFromAmenity(`Grocery in ${r}`, ctx.amenityCounts.grocery, 'grocery', 'stores'),
-    signalFromAmenity(`Park areas in ${r}`, ctx.amenityCounts.park, 'park', 'areas'),
-    signalFromAmenity(`Transit stops in ${r}`, ctx.amenityCounts.transit, 'transit', 'stops'),
-    signalFromAmenity(`Construction sites in ${r}`, ctx.amenityCounts.construction, 'construction', 'sites'),
+  const signals: Array<{ sig: Signal; category: Anomaly['category'] }> = [
+    { sig: signalFromAmenity(`Restaurants in ${r}`, ctx.amenityCounts.restaurant, 'restaurant', 'places'), category: 'livability' },
+    { sig: signalFromAmenity(`Cafés in ${r}`, ctx.amenityCounts.cafe, 'cafe', 'places'), category: 'livability' },
+    { sig: signalFromAmenity(`Schools in ${r}`, ctx.amenityCounts.school, 'school', 'places'), category: 'livability' },
+    { sig: signalFromAmenity(`Grocery in ${r}`, ctx.amenityCounts.grocery, 'grocery', 'stores'), category: 'livability' },
+    { sig: signalFromAmenity(`Park areas in ${r}`, ctx.amenityCounts.park, 'park', 'areas'), category: 'livability' },
+    { sig: signalFromAmenity(`Transit stops in ${r}`, ctx.amenityCounts.transit, 'transit', 'stops'), category: 'livability' },
+    { sig: signalFromAmenity(`Construction sites in ${r}`, ctx.amenityCounts.construction, 'construction', 'sites'), category: 'gentrification' },
   ];
 
   if (ctx.permitsLast6m > 0) {
+    // permits500m is the benchmark for permits within a 500m radius; we
+    // divide its p50 by 6 to approximate a 6-month baseline for larger radii.
+    const baseline = Math.max(1, Math.round(BENCHMARKS.metrics.permits500m.p50 / 6));
     signals.push({
-      name: 'Building permits (last 6 months)',
-      current: ctx.permitsLast6m,
-      baseline: Math.max(1, Math.round(BENCHMARKS.metrics.permits500m.p50)),
-      unit: 'permits',
+      sig: {
+        name: 'Building permits (last 6 months)',
+        current: ctx.permitsLast6m,
+        baseline,
+        unit: 'permits',
+      },
+      category: 'gentrification',
+    });
+  }
+  if (ctx.permitsLast30d > 0 && ctx.permitsLast6m > 4) {
+    const baseline = Math.max(0.5, ctx.permitsLast6m / 6);
+    signals.push({
+      sig: {
+        name: 'Permit surge (last 30d)',
+        current: ctx.permitsLast30d,
+        baseline,
+        unit: 'permits/mo',
+      },
+      category: 'gentrification',
     });
   }
   if (ctx.complaintsLast90d > 0) {
+    const baseline = Math.max(1, Math.round(BENCHMARKS.metrics.complaints.p50 / 3));
     signals.push({
-      name: '311 complaints (last 90 days)',
-      current: ctx.complaintsLast90d,
-      baseline: Math.max(1, Math.round(BENCHMARKS.metrics.complaints.p50)),
-      unit: 'complaints',
+      sig: {
+        name: '311 complaints (last 90 days)',
+        current: ctx.complaintsLast90d,
+        baseline,
+        unit: 'complaints',
+      },
+      category: 'quality-of-life',
+    });
+  }
+  if (ctx.complaintsLast30d > 0 && ctx.complaintsLast90d > 2) {
+    const baseline = Math.max(0.33, ctx.complaintsLast90d / 3);
+    signals.push({
+      sig: {
+        name: '311 complaint surge (last 30d)',
+        current: ctx.complaintsLast30d,
+        baseline,
+        unit: 'complaints/mo',
+      },
+      category: 'quality-of-life',
+    });
+  }
+  if (ctx.permitsLast6m >= 5) {
+    const ratio = ctx.permitsLast6m / Math.max(1, ctx.complaintsLast90d);
+    const baseline = 1.5;
+    signals.push({
+      sig: {
+        name: 'Gentrification pressure (permits/complaints)',
+        current: Number(ratio.toFixed(2)),
+        baseline,
+        unit: 'ratio',
+      },
+      category: 'gentrification',
     });
   }
   if (ctx.airQuality) {
     signals.push({
-      name: 'Air quality (PM2.5)',
-      current: ctx.airQuality.pm25,
-      baseline: 12,
-      unit: 'µg/m³',
+      sig: {
+        name: 'Air quality (PM2.5)',
+        current: ctx.airQuality.pm25,
+        baseline: 12,
+        unit: 'µg/m³',
+      },
+      category: 'environment',
     });
   }
   if (ctx.census) {
     signals.push({
-      name: 'Median household income',
-      current: ctx.census.medianIncome,
-      baseline: 65000,
-      unit: 'USD',
+      sig: {
+        name: 'Median household income',
+        current: ctx.census.medianIncome,
+        baseline: 65000,
+        unit: 'USD',
+      },
+      category: 'livability',
     });
   }
 
   const anomalies: Anomaly[] = [];
-  for (const s of signals) detectOne(s, anomalies);
+  for (const { sig, category } of signals) detectOne(sig, anomalies, category);
   return anomalies.sort((a, b) => Math.abs(b.zscore) - Math.abs(a.zscore));
 }
