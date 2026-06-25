@@ -82,7 +82,7 @@ function safeFilename(addr) {
 async function verifyOne(addr) {
   const url = `${BASE}/api/report?address=${encodeURIComponent(addr)}&debug=1`;
   const t0 = Date.now();
-  const res = await fetch(url, { signal: AbortSignal.timeout(45_000) });
+  const res = await fetch(url, { signal: AbortSignal.timeout(90_000) });
   const ms = Date.now() - t0;
   if (!res.ok) {
     return { address: addr, ok: false, ms, status: res.status };

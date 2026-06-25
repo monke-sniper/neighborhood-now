@@ -102,7 +102,7 @@ export function computeBreakdown(
   const greenBase = safeRound(
     percentileScore(parks, b.park.p10, b.park.p90, false),
   );
-  const greenFloor = parks === 0 ? 15 : parks <= 2 ? 35 : 0;
+  const greenFloor = parks === 0 ? 10 : parks === 1 ? 20 : 0;
   const greenSpace = safeRound(Math.max(greenBase, greenFloor));
 
   let development: number;

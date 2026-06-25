@@ -120,6 +120,7 @@ export default function Home() {
         </p>
         <AddressInput
           radius={radius}
+          hasReport={Boolean(report)}
           onReport={(r) => {
             setReport(r);
             setStatus('LIVE');

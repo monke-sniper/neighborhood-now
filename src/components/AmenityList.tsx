@@ -121,8 +121,17 @@ export function AmenityList({ report, radiusMeters }: Props) {
       })}
 
       {SECTIONS.every((s) => (byKind.get(s.key) ?? []).length === 0) && (
-        <div className="text-xs text-[var(--color-text-mute)] uppercase tracking-wider py-2 text-center">
-          [ NO NAMED PLACES FOUND IN RADIUS ]
+        <div className="text-xs text-[var(--color-text-mute)] uppercase tracking-wider py-2 text-center leading-relaxed">
+          [ NO MAPPED PLACES IN {radiusLabel(radiusMeters).toUpperCase()} ]
+          <br />
+          <span className="text-[10px]">
+            THIS AREA MAY BE UNINCORPORATED, INDUSTRIAL, OR UNMAPPED IN OPENSTREETMAP
+          </span>
+        </div>
+      )}
+      {!SECTIONS.every((s) => (byKind.get(s.key) ?? []).length === 0) && (
+        <div className="text-[10px] text-[var(--color-text-mute)] uppercase tracking-wider pt-1 border-t border-[var(--color-border)] text-center">
+          [ TIP ] MISSING A CATEGORY? TRY A LARGER RADIUS
         </div>
       )}
     </div>

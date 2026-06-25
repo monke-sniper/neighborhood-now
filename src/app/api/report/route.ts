@@ -8,6 +8,7 @@ import { fetchAirQuality } from '@/lib/api/weather';
 import { computeBreakdown, computeTotal } from '@/lib/engine/score';
 import { detectAnomalies, type AnomalyContext } from '@/lib/engine/anomalies';
 import { forecastTrend } from '@/lib/engine/forecast';
+import { explainAll } from '@/lib/engine/explain';
 import { log } from '@/lib/logger';
 import { TTLCache } from '@/lib/utils/cache';
 import { CONFIG, parseRadius } from '@/lib/config';
@@ -129,6 +130,7 @@ export async function GET(req: Request): Promise<NextResponse> {
 
     const breakdown = computeBreakdown(amenities.amenities, permits, radius);
     const score = computeTotal(breakdown);
+    const explanations = explainAll(score, amenities.amenities, permits, radius);
 
     const months = lastNMonths(12);
     const permitsByMonth = seriesFromDates(
@@ -203,7 +205,9 @@ export async function GET(req: Request): Promise<NextResponse> {
       address: geo.displayName,
       coords: { lat: geo.lat, lon: geo.lon },
       fetchedAt: new Date().toISOString(),
+      radiusMeters: radius,
       score,
+      explanations,
       amenities,
       permits,
       complaints,

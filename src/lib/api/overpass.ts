@@ -36,7 +36,7 @@ export function buildOverpassQuery(center: LatLon, radiusMeters: number): string
     `(around:${r},${lat},${lon});` +
     `way["leisure"~"^(park|garden|nature_reserve|playground|sports_centre|fitness_centre|swimming_pool|pitch|golf_course|dog_park)$"]` +
     `(around:${r},${lat},${lon});` +
-    `way["landuse"~"^(park|forest|recreation_ground|meadow|grass|cemetery)$"]` +
+    `way["landuse"~"^(forest|recreation_ground)$"]` +
     `(around:${r},${lat},${lon});` +
     `way["building"="construction"](around:${r},${lat},${lon});` +
     `way["landuse"="construction"](around:${r},${lat},${lon});` +
@@ -92,7 +92,8 @@ function classifyAmenity(tags: Record<string, string>): AmenityKind | null {
     l === 'pitch' ||
     l === 'golf_course' ||
     l === 'dog_park' ||
-    l === 'playground'
+    l === 'playground' ||
+    lu === 'recreation_ground'
   ) {
     return 'recreation';
   }
@@ -101,11 +102,7 @@ function classifyAmenity(tags: Record<string, string>): AmenityKind | null {
     l === 'garden' ||
     l === 'nature_reserve' ||
     lu === 'park' ||
-    lu === 'forest' ||
-    lu === 'recreation_ground' ||
-    lu === 'meadow' ||
-    lu === 'grass' ||
-    lu === 'cemetery'
+    lu === 'forest'
   ) {
     return 'park';
   }

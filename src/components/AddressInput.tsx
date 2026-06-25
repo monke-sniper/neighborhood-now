@@ -7,17 +7,22 @@ import { clientHeaders } from '@/lib/api/client';
 interface Props {
   onReport: (r: NeighborhoodReport) => void;
   radius: number;
+  hasReport?: boolean;
 }
 
-export function AddressInput({ onReport, radius }: Props) {
+const EXAMPLE_ADDRESSES = [
+  '123 QUEEN ST W, TORONTO',
+  'CN TOWER, TORONTO',
+  'KENSINGTON MARKET, TORONTO',
+  'SCARBOROUGH TOWN CENTRE, TORONTO',
+];
+
+export function AddressInput({ onReport, radius, hasReport }: Props) {
   const [value, setValue] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    const addr = value.trim();
-    if (!addr) return;
+  async function fetchReport(addr: string) {
     setLoading(true);
     setError(null);
     try {
@@ -36,6 +41,18 @@ export function AddressInput({ onReport, radius }: Props) {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const addr = value.trim();
+    if (!addr) return;
+    await fetchReport(addr);
+  }
+
+  function tryExample(addr: string) {
+    setValue(addr);
+    void fetchReport(addr);
   }
 
   return (
@@ -60,6 +77,22 @@ export function AddressInput({ onReport, radius }: Props) {
           {loading ? '[ FETCHING… ]' : '[ ANALYZE ]'}
         </button>
       </div>
+      {!hasReport && (
+        <div className="flex flex-wrap items-center gap-2 text-[10px] text-[var(--color-text-mute)] uppercase tracking-wider">
+          <span>&gt; TRY:</span>
+          {EXAMPLE_ADDRESSES.map((a) => (
+            <button
+              key={a}
+              type="button"
+              disabled={loading}
+              onClick={() => tryExample(a)}
+              className="px-2 py-1 border border-[var(--color-border)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:opacity-50"
+            >
+              [ {a} ]
+            </button>
+          ))}
+        </div>
+      )}
       {error && (
         <div className="text-xs text-[var(--color-bad)] px-1 uppercase tracking-wider">
           [ ERR ] {error}

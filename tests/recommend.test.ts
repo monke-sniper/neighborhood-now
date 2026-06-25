@@ -7,6 +7,7 @@ function makeReport(overrides: Partial<NeighborhoodReport['score']['breakdown']>
     address: 'test',
     coords: { lat: 43.65, lon: -79.38 },
     fetchedAt: new Date().toISOString(),
+    radiusMeters: 3000,
     score: {
       total: 50,
       breakdown: {
@@ -34,6 +35,7 @@ function makeReport(overrides: Partial<NeighborhoodReport['score']['breakdown']>
     complaints: [],
     anomalies: [],
     trends: [],
+    explanations: [],
     sources: {
       overpass: 'ok',
       builddata: 'ok',

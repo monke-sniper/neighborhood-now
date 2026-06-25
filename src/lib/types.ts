@@ -144,7 +144,9 @@ export interface NeighborhoodReport {
   address: string;
   coords: LatLon;
   fetchedAt: string;
+  radiusMeters: number;
   score: LivabilityScore;
+  explanations: import('./engine/explain').ScoreExplanation[];
   amenities: OverpassResponse;
   permits: Permit[];
   complaints: Complaint[];
