@@ -1,344 +1,304 @@
-# Neighborhood Now
+# Neighborhood Now — FutureHacks 2026
 
 > Type an address. See what is happening. Know where it is going.
 
-Neighborhood Now is a neighborhood intelligence platform built for FutureHacks 2026. It aggregates live data from six open sources, runs statistical analysis to detect anomalies and forecast trends, and presents the result through a conversational interface. One address returns a full report: livability score, anomaly alerts, two-year forecast, what-if scenarios, and AI chat.
+A neighborhood intelligence platform. Type an address, get a full report: livability score, anomaly alerts, two-year forecast, what-if scenarios, AI chat, and side-by-side comparison of two addresses. Live data from OpenStreetMap, Toronto permits, Toronto 311 service requests, optional US Census + air quality, optional Ollama Cloud chat.
 
-[![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js&logoColor=white)](https://nextjs.org) [![React 19](https://img.shields.io/badge/React-19-149eca?logo=react&logoColor=white)](https://react.dev) [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org) [![MapLibre](https://img.shields.io/badge/MapLibre_GL-5-1a73e8)](https://maplibre.org) [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fmonke-sniper%2Fneighborhood-now)
+**Try it locally:** the app is on a single page (`/`). Toggle `[CORPUS]` in the header to use precomputed reports when the public APIs are down (great for the recording). Click `[ SHARE ]` to get a URL you can hand to anyone — it rehydrates the report on load.
 
-**Repository:** [github.com/monke-sniper/neighborhood-now](https://github.com/monke-sniper/neighborhood-now)
-
-## Contents
-
-- [Features](#features)
-- [Quick Start](#quick-start)
-- [Environment Variables](#environment-variables)
-- [Scripts](#scripts)
-- [Tests](#tests)
-- [Architecture](#architecture)
-- [Project Structure](#project-structure)
-- [API Reference](#api-reference)
-- [Engine Reference](#engine-reference)
-- [Customization](#customization)
-- [Troubleshooting](#troubleshooting)
-- [Known Limitations](#known-limitations)
-- [Tech Stack](#tech-stack)
-- [Acknowledgements](#acknowledgements)
-- [License](#license)
-
-## Features
-
-- **Livability score** — 0–100 rating across nine components: amenity density, transit access, food access, green space, development, civic, culture, recreation, and services. Each component is normalized via `((actual - p10) / (p90 - p10)) × 100` against live Toronto benchmarks. Includes a Top 10% / Above average / Average / Below average / Bottom 25% ranking label
-- **Configurable search radius** — 1 km / 2 km / 3 km / 5 km selector. Default is 3 km. Benchmarks scale with area automatically
-- **Twelve amenity kinds** — restaurants, cafés, schools, grocery, parks, transit, recreation (sports centres, fitness, swimming pools, playgrounds, dog parks), civic (community centres, social facilities, town halls, places of worship, police, fire stations), culture (museums, theatres, cinemas, arts centres), services (car repair, hair salons, opticians, banks, ATMs, pharmacies), construction
-- **Anomaly detection** — 12+ signal sources scored with Poisson-approximation z-score against the citywide p50 baseline. Warnings at |z| > 1.8, critical at |z| > 3
-- **Two-year forecast** — EWMA smoothing for short series (n < 6), ordinary-least-squares regression for longer series (n ≥ 6), with one-sigma confidence bands. Hard-floored to never drop more than 30% from the current value
-- **What-if simulator** — six scenarios (subway, park, 500-unit development, grocery, school, transit strike). Impacts are grounded in the current state and surface in the scorecard as inline deltas
-- **AI chat and recommendations** — natural-language questions and intervention recommendations, answered from the structured report only. Uses Ollama Cloud when a user-provided key is set
-- **In-browser API key settings** — the deployed app ships with zero server-side keys. Users add their own Ollama/Census/OpenWeather keys via the Settings panel; keys live in browser localStorage and travel per-request as `X-*-Key` headers. Safe for one-click Vercel deploy
-- **Terminal aesthetic** — JetBrains Mono, pure black background, teal `#5eead4` accents, sharp borders, `[BRACKET]` labels, and a top status bar with live clock and source health
-
-## Deploy to Vercel
-
-The app is designed for zero-config Vercel deployment. No server-side API keys are required — every user provides their own keys via the in-app Settings panel.
-
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fmonke-sniper%2Fneighborhood-now)
-
-See [DEPLOYMENT.md](./DEPLOYMENT.md) for the full guide, including the API key safety model, configuration, and troubleshooting.
-
-## Quick Start
-
-**Requirements:** Node.js 20.9 or newer, npm 10 or newer.
-
-### 1. Clone and install
+## Quick Start (local)
 
 ```bash
 git clone https://github.com/monke-sniper/neighborhood-now.git
 cd neighborhood-now
 npm install
-```
-
-### 2. Configure environment (optional)
-
-```bash
-cp .env.example .env.local
-```
-
-On Windows PowerShell use `Copy-Item .env.example .env.local` instead.
-
-Edit `.env.local` and add any keys you have. The application runs without any keys: geocoding, OpenStreetMap amenities, building permits, and 311 complaints all use free public sources. Keys only enable the optional layers.
-
-### 3. Run
-
-```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) and enter an address. Try `CN Tower, Toronto` for a representative report.
+Open [http://localhost:3000](http://localhost:3000) and enter an address. Try `CN Tower, Toronto` for a representative report. Click `[ CORPUS ]` in the header to switch to the offline precomputed dataset.
 
-### 4. Production build
+> **Why `npm run dev` and not `npx next dev`?** Our dev runner (`scripts/dev.mjs`) kills any stale `node.exe` holding the port, clears a corrupt `.next/`, and starts a clean dev server. It is **self-pid safe** (does not kill itself). Use `npm run dev:clean` to force-clear the cache.
+
+## Demo URLs (offline, corpus-backed)
+
+```
+http://localhost:3000/?a=CN+Tower,+Toronto&demo=1
+http://localhost:3000/?a=CN+Tower,+Toronto&b=Liberty+Village,+Toronto&demo=1&mode=compare
+http://localhost:3000/?a=CN+Tower,+Toronto&r=5000
+http://localhost:3000/?a=Bloor-Yonge,+Toronto&b=Rexdale,+Etobicoke,+Toronto&demo=1&mode=compare
+http://localhost:3000/?a=The+Beaches,+Toronto&b=King-Bay,+Toronto&demo=1&mode=compare
+```
+
+## WOW features
+
+- **Neighborhood DNA radar** — 9-axis animated radar of the score components. Toggle any what-if scenario and the polygon morphs to a new dashed-amber shape. Pure SVG, no extra deps.
+- **JUST-IN news ticker** — top-of-page Bloomberg-style marquee that scrolls the top anomalies as headlines with live timestamps. Server component, zero hydration cost.
+- **Side-by-side compare map** — two pins + two radius circles + color-coded permit markers (A=teal, B=amber).
+- **Verdict pills** — plain-language labels (`[ GENTRIFICATION FRONT-RUNNER ]`, `[ TRANSIT DESERT ]`, `[ FOOD DESERT ]`, `[ GREEN OASIS ]`, etc.) with one-line "WHY" explanations. Mounted at the top of every report.
+- **Shareable URLs** — `[ SHARE ]` button encodes the report state into the query string. The page rehydrates on load. One-click copy + X.com share.
+- **Per-school counterfactual** — for each school, computes the marginal impact on the total via a single analytic pass. Panel renders them sorted.
+- **Demo corpus + offline mode** — `npm run regen:corpus` writes precomputed `/api/report` responses to `public/data/corpus/*.json`. 10 demo addresses + 4 compare pairs are committed.
+- **In-browser API key settings** — zero server-side keys. Users add their own Ollama/Census/OpenWeather keys via Settings; keys live in `localStorage` and travel per-request as `X-*-Key` headers.
+- **Terminal aesthetic** — JetBrains Mono, pure black, teal `#5eead4` accents, sharp borders, top status bar with live clock and source health.
+
+## Production build
 
 ```bash
 npm run build
 npm start
 ```
 
-The output is a standard Next.js Node.js build that runs on any Node 20.9+ host.
-
-### 5. Other useful commands
-
-```bash
-npm test              # run 42 vitest unit + API tests
-npm run test:watch    # vitest in watch mode
-npm run calibrate     # re-capture Toronto benchmarks from live APIs
-npm run verify        # end-to-end: spawn dev server, hit 4 demo addresses, dump verification/*.json
-npm run lint          # eslint
-npx tsc --noEmit      # type check (no separate script)
-```
+The production build is **the recommended demo path** — Turbopack's dev server has a known hot-reload bug that can serve 500 on `/` after a few minutes of editing. `npm start` after `npm run build` is rock solid.
 
 ## Environment Variables
 
 | Variable | Required | Default | Purpose |
 |---|:---:|---|---|
-| `OLLAMA_API_KEY` | no | _(empty)_ | Bearer token for the Ollama Cloud chat API. Get a key at [ollama.com/settings/keys](https://ollama.com/settings/keys) |
-| `OLLAMA_BASE_URL` | no | `https://ollama.com` | Ollama endpoint. Use `http://localhost:11434` for a local Ollama instance |
-| `OLLAMA_MODEL` | no | `gpt-oss:20b` | Model name. Recommended: `gpt-oss:20b` (balanced) or `llama3.2:3b` (lighter) |
-| `CENSUS_KEY` | no | _(empty)_ | US Census ACS 5-year API key. Get a key at [api.census.gov/data/key_signup.html](https://api.census.gov/data/key_signup.html) |
-| `OPENWEATHER_KEY` | no | _(empty)_ | OpenWeatherMap API key for air quality. Get a key at [openweathermap.org/api](https://openweathermap.org/api) |
+| `OLLAMA_API_KEY` | no | _(empty)_ | Bearer token for Ollama Cloud chat |
+| `OLLAMA_BASE_URL` | no | `https://ollama.com` | Ollama endpoint. Use `http://localhost:11434` for local |
+| `OLLAMA_MODEL` | no | `gpt-oss:20b` | Model name. `gpt-oss:20b` (balanced) or `llama3.2:3b` (lighter) |
+| `CENSUS_KEY` | no | _(empty)_ | US Census ACS 5-year API key |
+| `OPENWEATHER_KEY` | no | _(empty)_ | OpenWeatherMap API key for air quality |
+| `TORONTO_311_RESOURCE_ID` | no | _(empty)_ | When set, fetches live Toronto 311 data from CKAN `datastore_search` instead of the bundled static file |
 | `PORT` | no | `3000` | Dev server port |
-
-The map does not require a key. MapLibre GL renders the CARTO dark-matter basemap, which is free for non-commercial use. To change the style, see [Customization](#customization).
 
 ## Scripts
 
 | Command | Description |
 |---|---|
-| `npm run dev` | Start the development server with hot reload on port 3000 |
-| `npm run build` | Production build using Turbopack. Exits when complete |
+| `npm run dev` | Self-pid-safe dev runner on :3000 |
+| `npm run dev:3000` | Alias for `npm run dev` |
+| `npm run dev:3030` | Dev runner on :3030 |
+| `npm run dev:clean` | Dev runner, force-clears `.next/` first |
+| `npm run build` | Production build (Turbopack) |
 | `npm start` | Run the production build |
-| `npm test` | Run vitest unit + API tests (42 tests) |
-| `npm run test:watch` | Vitest in watch mode |
-| `npm run calibrate` | Re-capture live Toronto benchmarks from Overpass + BuildData + 311 file. Writes `src/lib/engine/benchmarks.ts` |
-| `npm run verify` | End-to-end verification: spawns dev server, hits 4 demo addresses, writes `verification/<address>.json`, prints summary, kills server |
-| `npm run lint` | Run ESLint with the Next.js configuration |
-| `npx tsc --noEmit` | Type check in strict mode (no separate script) |
+| `npm test` | Run all vitest tests |
+| `npm run lint` | ESLint |
+| `npx tsc --noEmit` | Type check (strict mode) |
+| `npm run calibrate` | Re-capture Toronto benchmarks from live APIs |
+| `npm run verify` | Spawn dev server, hit 4 demo addresses + a compare demo, write `verification/*.json` and `public/data/corpus/*.json` |
+| `npm run regen:corpus` | Regenerate the offline corpus from `?synth=1` (no network required) |
 
 ## Tests
 
-78 tests across 7 files. They run against in-memory data only (no network), so they are fast (~280 ms total) and deterministic.
-
-```bash
-npm test
-```
+Tests run against in-memory data only — no network, fast (~400 ms), deterministic.
 
 | File | Tests | What it covers |
 |---|---:|---|
-| `tests/score.test.ts` | 14 | Percentile scoring, ranking, clamp behavior, the no-13/100-floor invariant, 9-component shape |
-| `tests/anomalies.test.ts` | 5 | Z-score thresholds, citywide-baseline fallback, sort order |
-| `tests/forecast.test.ts` | 11 | EWMA for n<6, OLS for n≥6, hard floor, confidence bands, R² thresholds |
-| `tests/whatif.test.ts` | 10 | Six scenarios, grounded impacts, clamp behavior, 9-component shape |
-| `tests/recommend.test.ts` | 14 | JSON extraction (raw/fenced/prose), scenario-id validation, fallback for weakest components |
-| `tests/amenity.test.ts` | 20 | `pickName` with name/name:en/brand/operator/ref fallback, deriveKindLabel from 6 tag keys |
-| `tests/api.test.ts` | 4 | `/api/report` GET handler: 400 on missing address, 200 with body, `?debug=1` shape |
+| `tests/score.test.ts` | 18 | Score, ranking, presence renormalization, 9-component shape, `nowMs` |
+| `tests/anomalies.test.ts` | 5 | Z-score thresholds, sort order, baseline fallback, 30d surge, gentrification pressure, category tags |
+| `tests/forecast.test.ts` | 11 | EWMA for n<6, OLS for n≥6, hard floor, confidence bands, R² |
+| `tests/whatif.test.ts` | 10 | 6 scenarios, grounded impacts, clamp, 9-component shape |
+| `tests/recommend.test.ts` | 14 | JSON extraction, scenario-id validation, weakest-component fallback |
+| `tests/amenity.test.ts` | 20 | `pickName`, `hasRealName`, kind-label derivation |
+| `tests/overpass.test.ts` | 6 | Query shape, removed patterns, 12-kinds coverage |
+| `tests/explain.test.ts` | 15 | 9 explanations, weights, contributions, radius scaling |
+| `tests/forecast-template.test.ts` | 6 | Benchmark template + sparse data |
+| `tests/skeleton.test.ts` | 2 | Module exports |
+| `tests/api.test.ts` | 5 | `/api/report` happy path + 400 + debug + shape + radius |
+| (others) | 30 | compose, errors, http, ollama, timeseries, analyzeSchools |
 
-The end-to-end harness lives at `scripts/verify.mjs` and is run separately:
-
-```bash
-npm run verify
-```
-
-It spawns `next dev` on port 3939, hits `/api/report?address=<each demo>&debug=1` for four addresses, writes `verification/<address>.json`, prints a per-address summary, then kills the server. Used to prove the live system returns varied scores and that no source reports `failed`.
+End-to-end: `npm run regen:corpus` regenerates 10 singles + 4 compares into `public/data/corpus/`. The `[CORPUS]` toggle in the header serves them.
 
 ## Architecture
 
-The following diagram describes the data flow from address to rendered report.
-
 ```
 address string
-   │
-   ▼
-[ Nominatim ] ──► {lat, lon, display_name}      (1 req/sec, cached 24h)
-   │
-   ├──► [ Overpass ]    ──► amenities, transit, landuse     (live, radius 1.5km, 3 mirrors)
-   ├──► [ BuildData ]   ──► permits[] (filtered by 1.5km)   (live, cached 1h)
-   ├──► [ 311 File ]    ──► complaints[]                    (file snapshot, 1.5km)
-   ├──► [ Census ]      ──► demographics                    (US only, optional)
-   └──► [ OpenWeather ] ──► air quality                     (optional)
-   │
-   ▼
-[ score engine ]       ──► LivabilityScore (0-100, 5 components, percentile-ranked)
-[ anomalies engine ]   ──► Anomaly[]   (z-score, |z|>1.8 warn, |z|>3 critical)
+    │
+    ▼
+[ Nominatim ] ──► {lat, lon, display_name}
+    │
+    ├──► [ Overpass ]   ──► amenities, transit, landuse   (parallel mirrors, Promise.any)
+    ├──► [ BuildData ]  ──► permits[]                     (1h cache)
+    ├──► [ 311 ]        ──► complaints[]                  (live CKAN or static file)
+    ├──► [ Census ]     ──► demographics                  (US only, bbox-FIPS lookup)
+    └──► [ OpenWeather ]──► air quality                   (optional)
+    │
+    ▼
+[ score engine ]       ──► LivabilityScore (0-100, 9 components, percentile-ranked)
+[ anomalies engine ]   ──► Anomaly[]   (z-score, |z|>1.8 warn, |z|>3 critical, category-tagged)
 [ forecast engine ]    ──► Trend[]     (EWMA n<6, OLS n≥6, 1σ bands)
-[ whatif engine ]      ──► ScenarioResult[] (6 scenarios, grounded impacts)
-   │
-   ▼
-UI: Map | ReportCard | AnomalyList | ForecastChart | WhatIfSimulator | ChatBox
+[ whatif engine ]      ──► ScenarioResult[] (6 scenarios, grounded, stackable)
+[ school analyzer ]    ──► SchoolImpact[]  (per-school counterfactual, O(N))
+[ verdict engine ]     ──► Verdict[]       (plain-language labels)
+    │
+    ▼
+NeighborhoodReport → {single mode | compare mode (a + b + delta)}
+    │
+    ▼
+UI: VerdictPills | Map (with radius circle) | ReportCard | ScoreRadar (DNA) | AnomalyList | NewsTicker | SchoolsPanel | ForecastChart | WhatIfSimulator | RecommendationsPanel | ChatBox | ComparisonView (with CompareMap)
 ```
 
-The orchestrator at `/api/report` uses `Promise.allSettled` so that a single failed upstream never blocks the rest of the report. If Census is unavailable, the report still ships with OSM, permit, and 311 data.
+The orchestrator at `/api/report` uses `Promise.race` against a deadline and falls back gracefully when any single upstream is down.
+
+`/api/compare?a=X&b=Y` runs the orchestrator twice in parallel and returns a delta response. The UI swaps between single and compare via the header toggle.
+
+`/api/corpus?address=X` reads precomputed JSON from `public/data/corpus/`. When the header `[CORPUS]` toggle is on, `useReportState` and `useCompareState` hit this endpoint first and fall back to the live orchestrator on 404.
+
+## Engine Reference
+
+**Score** (`src/lib/engine/score.ts`) — counts amenities + permits in a configurable radius, normalizes each component via `((actual - p10) / (p90 - p10)) × 100` against the live Toronto benchmarks, then computes a presence-aware weighted total. Weights from `src/lib/config.ts`:
+
+```typescript
+weights: { amenityDensity: 0.18, transitScore: 0.18, foodAccess: 0.14,
+           greenSpace: 0.10, development: 0.10, civicScore: 0.075,
+           cultureScore: 0.075, recreationScore: 0.075, serviceScore: 0.075 }
+```
+
+The sum (0.965) is intentional — components with no data (e.g. a Census-less US address) are excluded and the total renormalizes over the present subset. `presence` is reported in the response.
+
+**Anomalies** (`src/lib/engine/anomalies.ts`) — 12+ signal sources (5 score components, 7 amenity counts, plus optional permits/311/air/census) scored with Poisson-approximation z-score `z = (current - baseline) / √baseline` against the citywide p50 baseline. Tagged with `category: 'gentrification' | 'livability' | 'quality-of-life' | 'environment'`. Sorted by |z| descending.
+
+**Forecast** (`src/lib/engine/forecast.ts`) — exponential-weighted moving average for short series (n = 3..5), OLS regression for longer series (n ≥ 6), with 1σ residual-based confidence bands at 6/12/24 month horizons. R² drives the confidence label: ≥0.7 high, ≥0.4 medium, otherwise low. Hard-floored to never drop more than 30% from the current value.
+
+**What-if** (`src/lib/engine/whatif.ts`) — 6 scenarios. Each impact is a constant or a function of the current breakdown, so a subway in a transit-poor area produces a larger delta than one in a transit-rich area. `composeScenarios` stacks multiple scenarios. Client-safe (no upstream deps).
+
+**Verdict** (`src/lib/engine/verdict.ts`) — 11 plain-language verdicts generated by rules over the breakdown + anomalies. Each verdict has a `key`, `label`, `short`, `emoji`, and a one-line `reason` that surfaces the actual numbers.
+
+**School analyzer** (`src/lib/engine/score.ts:analyzeSchools`) — for each school, computes the marginal impact on the total via a single analytic pass. No second `computeBreakdown` call per school.
 
 ## Project Structure
 
 ```
 .
-├── data/
-│   └── toronto-311.json            # Static 311 snapshot, replace to refresh
-├── public/                         # Static assets
+├── data/                              # Reference inputs (not currently used at runtime)
+├── public/data/
+│   ├── toronto-311.json               # Static downtown records (legacy, kept for back-compat)
+│   ├── toronto-311-downtown.json      # Static downtown records
+│   ├── toronto-311-citywide.json      # Static citywide records (default fallback)
+│   └── corpus/                        # Precomputed demo reports (committed)
 ├── src/
 │   ├── app/
-│   │   ├── api/                    # Route handlers
-│   │   │   ├── report/route.ts     # GET  /api/report?address=X
-│   │   │   ├── anomalies/route.ts  # POST /api/anomalies
-│   │   │   ├── forecast/route.ts   # POST /api/forecast
-│   │   │   ├── whatif/route.ts     # POST /api/whatif
-│   │   │   └── chat/route.ts       # POST /api/chat
-│   │   ├── layout.tsx              # Root layout, dark theme
-│   │   ├── page.tsx                # Main page, holds report state
-│   │   └── globals.css             # Tailwind 4 + dark tokens
-│   ├── components/                 # UI components
+│   │   ├── api/
+│   │   │   ├── report/route.ts        # GET  /api/report?address=X[&radius=][&synth=1]
+│   │   │   ├── compare/route.ts       # GET  /api/compare?a=X&b=Y[&radius=][&synth=1]
+│   │   │   ├── corpus/route.ts        # GET  /api/corpus?address=X (precomputed)
+│   │   │   ├── anomalies/route.ts     # POST /api/anomalies
+│   │   │   ├── forecast/route.ts      # POST /api/forecast
+│   │   │   ├── whatif/route.ts        # POST /api/whatif
+│   │   │   ├── chat/route.ts          # POST /api/chat
+│   │   │   └── recommend/route.ts     # POST /api/recommend
+│   │   ├── layout.tsx                 # Root layout, dark theme
+│   │   ├── page.tsx                   # Main page, single + compare modes, URL rehydration
+│   │   └── globals.css                # Tailwind 4 + dark tokens
+│   ├── components/
 │   │   ├── AddressInput.tsx
-│   │   ├── MapView.tsx             # MapLibre GL
-│   │   ├── ReportCard.tsx
+│   │   ├── AmenityList.tsx
 │   │   ├── AnomalyList.tsx
-│   │   ├── ForecastChart.tsx       # Recharts
-│   │   ├── WhatIfSimulator.tsx
-│   │   └── ChatBox.tsx
+│   │   ├── ChatBox.tsx
+│   │   ├── CompareMap.tsx             # Side-by-side map with radius circles
+│   │   ├── ComparePanel.tsx
+│   │   ├── ComparisonView.tsx
+│   │   ├── ForecastChart.tsx
+│   │   ├── MapView.tsx
+│   │   ├── NewsTicker.tsx             # JUST-IN marquee
+│   │   ├── RadiusSelect.tsx
+│   │   ├── RecommendationsPanel.tsx
+│   │   ├── ReportCard.tsx
+│   │   ├── ReportSkeleton.tsx
+│   │   ├── ScoreBar.tsx
+│   │   ├── ScoreRadar.tsx             # Neighborhood DNA 9-axis radar
+│   │   ├── SchoolsPanel.tsx
+│   │   ├── SettingsPanel.tsx
+│   │   ├── ShareButton.tsx            # Shareable URL + copy + X
+│   │   ├── Skeleton.tsx
+│   │   ├── VerdictPills.tsx           # Plain-language labels
+│   │   └── WhatIfSimulator.tsx
+│   ├── hooks/
+│   │   ├── useClock.ts                # 1s clock, client component
+│   │   ├── useCompareState.ts         # compare fetch + status FSM, useCorpus support
+│   │   ├── useReportState.ts          # address → report with retry + corpus fallback
+│   │   └── useWhatIfState.ts          # active scenarios + composed
 │   └── lib/
-│       ├── api/                    # Data fetchers (6)
-│       ├── engine/                 # Analysis engines (4)
-│       ├── utils/                  # Geo + cache helpers
-│       ├── config.ts
-│       └── types.ts
+│       ├── api/                       # Data fetchers (7 modules)
+│       ├── engine/                    # Pure analysis engines (anomalies, score, forecast, whatif, verdict, ...)
+│       ├── llm/                       # Shared Ollama HTTP + header reader
+│       ├── prompts/                   # Chat + recommend system prompts
+│       ├── utils/                     # geo, cache, amenity, share
+│       ├── config.ts                  # weights, mirrors, radii, cache TTLs
+│       ├── errors.ts                  # UpstreamError
+│       ├── http.ts                    # postJson/httpText with timeouts
+│       ├── keys.ts                    # localStorage client-keys abstraction
+│       ├── logger.ts                  # structured logger (no secrets)
+│       ├── synthetic.ts               # Offline-corpus SPECS + buildSyntheticReport
+│       └── types.ts                   # shared types
+├── tests/                            # 17 files, 151 tests
+├── scripts/
+│   ├── calibrate.mjs                  # Re-capture Toronto benchmarks
+│   ├── verify.mjs                     # Spawn dev server, hit 4 demo addresses, write verification + corpus
+│   ├── regen-corpus.mjs               # Regenerate offline corpus from ?synth=1
+│   ├── dev.mjs                        # Self-pid-safe dev runner
+│   └── screenshot.mjs
 ├── .env.example
-├── next.config.ts
-├── package.json
-└── tsconfig.json                   # strict mode
+├── next.config.ts                     # optimizePackageImports for recharts + maplibre-gl
+├── tsconfig.json                     # strict mode
+├── plan.md                           # Hackathon build plan (this session)
+└── README.md                         # You are here
 ```
 
 ## API Reference
 
-| Method | Path | Purpose | Example |
-|---|---|---|---|
-| `GET` | `/api/report` | Full neighborhood report (orchestrator) | `/api/report?address=CN+Tower+Toronto` |
-| `POST` | `/api/anomalies` | Detect anomalies from signals | `{ "signals": [{ "name": "permits", "current": 7, "baseline": 2.1, "unit": "permits" }] }` |
-| `POST` | `/api/forecast` | Forecast from time series | `{ "series": [{ "name": "permits", "history": [1,2,3,4,5,6] }] }` |
-| `POST` | `/api/whatif` | Simulate a scenario | `{ "current": { ... }, "scenarioId": "subway" }` |
-| `POST` | `/api/chat` | AI chat over the report | `{ "question": "Is this good for families?", "report": { ... } }` |
-
-All POST endpoints accept and return JSON. The orchestrator returns a full `NeighborhoodReport` object; see `src/lib/types.ts` for the schema.
-
-## Engine Reference
-
-**Score** (`src/lib/engine/score.ts`) — counts amenities, transit stops, and grocery stores in a 1.5 km radius, normalizes each component via `((actual - p10) / (p90 - p10)) × 100` against the live Toronto benchmarks in `src/lib/engine/benchmarks.ts`, then computes a weighted average using weights from `src/lib/config.ts`: amenity 25%, transit 25%, food 20%, green 15%, development 15%. Returns a `ranking` label of Top 10% / Above average / Average / Below average / Bottom 25%.
-
-**Anomalies** (`src/lib/engine/anomalies.ts`) — twelve plus signal sources (overall + per-metric amenity counts, permits, complaints, optional air and census) scored with Poisson-approximation z-score `z = (current - baseline) / √baseline` against the citywide p50 baseline. Signals with |z| ≤ 1.8 are dropped. Remaining anomalies are sorted by |z| descending.
-
-**Forecast** (`src/lib/engine/forecast.ts`) — exponential-weighted moving average for short series (n = 3..5), ordinary-least-squares regression for longer series (n ≥ 6), with one-sigma residual-based confidence bands at the 6, 12, and 24 month horizons. R² drives the confidence label: above 0.7 is high, above 0.4 is medium, otherwise low.
-
-**What-if** (`src/lib/engine/whatif.ts`) — six scenarios (subway, park, 500-unit development, grocery, school, transit strike). Each impact can be a constant or a function of the current breakdown, so a subway in a transit-poor area produces a larger delta than one in a transit-rich area. The simulator clamps the modified components to 0–100, then re-runs the weighted total. Computation is client-side with no network round-trip.
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/report?address=X[&radius=1000..5000][&synth=1][&debug=1]` | Full neighborhood report |
+| `GET` | `/api/compare?a=X&b=Y[&radius=][&synth=1]` | Two-address comparison |
+| `GET` | `/api/corpus?address=X` | Precomputed report from `public/data/corpus/` (404 if absent) |
+| `POST` | `/api/anomalies` | `{ permitsLast30d, permitsLast6m, complaintsLast30d, complaintsLast90d, amenityCounts, scoreBreakdown, airQuality?, census? }` → `Anomaly[]` |
+| `POST` | `/api/forecast` | `{ series: [{ name, history: number[] }] }` → `Trend[]` |
+| `POST` | `/api/whatif` | `{ current: ScoreBreakdown, scenarioId: string }` → `ScenarioResult` |
+| `POST` | `/api/chat` | `{ question, report }` → `{ answer, modelUsed }` |
+| `POST` | `/api/recommend` | `{ report }` → `{ recommendations, thinking, ideas, modelUsed }` |
 
 ## Customization
 
-**Add a what-if scenario.** Edit `src/lib/engine/whatif.ts` and append an entry to the `SCENARIOS` array:
-
+**Add a what-if scenario.** Edit `src/lib/engine/whatif.ts` and append to `SCENARIOS`:
 ```typescript
-{
-  id: 'bike_lanes',
-  name: 'New bike lanes',
-  emoji: 'bike',
+{ id: 'bike_lanes', name: 'New bike lanes', emoji: 'B',
   description: 'Protected lanes on main streets',
-  impact: { transitScore: 10, greenSpace: 5 },
-}
+  impact: { transitScore: 10, greenSpace: 5 } }
 ```
 
-The new card appears in the simulator on next reload.
+**Add a verdict.** Edit `src/lib/engine/verdict.ts` and append to the `deriveVerdicts` rules.
 
-**Adjust score weights.** Edit `src/lib/config.ts`:
+**Adjust score weights.** Edit `weights` in `src/lib/config.ts`. Weights should sum to ≈1.0; the score renormalizes over present components.
 
-```typescript
-weights: { amenityDensity: 0.25, transitScore: 0.25, foodAccess: 0.20,
-           greenSpace: 0.15, development: 0.15 }
-```
+**Change the map style.** Edit `STYLE_URL` in `src/components/MapView.tsx`. The default is CARTO dark-matter (free for non-commercial use).
 
-Weights should sum to 1.0.
+**Refresh the 311 dataset.** Either re-run `npm run calibrate` to regenerate Toronto benchmarks, or set `TORONTO_311_RESOURCE_ID` to a real CKAN resource id to pull live data.
 
-**Change the map style.** Edit `STYLE_URL` in `src/components/MapView.tsx`. Some free options:
-
-- `https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json` — default dark style
-- `https://basemaps.cartocdn.com/gl/positron-gl-style/style.json` — CARTO light
-- `https://tiles.openfreemap.org/styles/positron` — OpenFreeMap light
-- `https://demotiles.maplibre.org/style.json` — MapLibre demo, works offline
-
-**Refresh the 311 dataset.** Replace `data/toronto-311.json` with new records in the shape `{ id, type, date, lat, lon, status }`. Keep the file under approximately 5 MB for responsive filtering.
-
-**Tune anomaly thresholds.** Edit the constants in `src/lib/engine/anomalies.ts`. The default thresholds are 2 (warning) and 3 (critical) and are documented in the source.
+**Tune anomaly thresholds.** Edit the `ZSCORE_THRESHOLD` constant in `src/lib/engine/anomalies.ts`. Defaults: 1.8 warning, 3.0 critical.
 
 ## Troubleshooting
 
-**Port 3000 is already in use.**
-
-Another process is bound to the port. On macOS or Linux, run `npx kill-port 3000`. On Windows, run `Stop-Process -Name node -Force` from PowerShell. Then `npm run dev` again.
-
-**The 311 complaints section shows zero complaints.**
-
-The 311 dataset is a static file (`data/toronto-311.json`) covering downtown Toronto. Outside that geographic area, the result is empty. To extend coverage, replace the file with a snapshot for your area (see [Customization](#customization)).
-
-**The AI chat returns "AI not configured".**
-
-`OLLAMA_API_KEY` is not set. Add it to `.env.local` and restart the dev server. Get a key at [ollama.com/settings/keys](https://ollama.com/settings/keys).
-
-**The AI chat returns 401 or "model not found".**
-
-The most common cause is a mismatch between the model name in `.env.local` and the models provisioned to your Ollama Cloud account. The default `gpt-oss:20b` is available on the free tier. Try `llama3.2:3b` if quota is constrained.
-
-**The Census section does not appear.**
-
-Census is only available for US coordinates. Non-US addresses skip the Census step. To test, enter a US address such as `Times Square, New York` and provide a valid `CENSUS_KEY`.
-
-**The map shows a blank gray rectangle.**
-
-MapLibre requires network access to fetch the basemap style and tiles. Verify connectivity and check the browser console for CORS or 404 errors. The application does not crash if the map fails; the rest of the report still renders.
-
-**`npm run typecheck` reports errors.**
-
-Run `npx tsc --noEmit --pretty` for line numbers. The project uses TypeScript strict mode: missing types, implicit `any`, and unused locals all fail the check.
-
-**The BuildData API is slow or rate-limiting.**
-
-The BuildData response is cached for one hour. If you are running the report rapidly, requests will queue at the upstream. If the upstream is down entirely, the report still completes — permits are skipped and OpenStreetMap construction tags fill the gap.
+- **Port 3000 is in use.** `Get-Process -Name node -ErrorAction SilentlyContinue | Stop-Process -Force`. macOS/Linux: `lsof -ti :3000 | xargs -r kill -9`.
+- **Dev server returns 500 on `/`.** Use `npm run build && npm start` for the production path. If dev is in a bad state: `npm run dev:clean` (kills processes, clears `.next/`, restarts).
+- **311 complaints section is empty.** The static dataset covers 6 Toronto neighborhoods. For citywide live data, set `TORONTO_311_RESOURCE_ID`. Outside the calibrated neighborhoods, the demo corpus (`[CORPUS]`) provides precomputed reports.
+- **AI chat returns "not configured".** Add `OLLAMA_API_KEY` in `.env.local` (server) or the Settings panel (per-browser, via `X-Ollama-Key` header).
+- **Census section doesn't appear.** Census is US-only and requires `CENSUS_KEY`. The bbox FIPS lookup covers ~20 major metros; addresses outside return `null` (the section is gracefully hidden).
+- **The map shows a blank gray rectangle.** MapLibre needs network access to fetch tiles. The rest of the report still renders if the map fails.
 
 ## Known Limitations
 
-- The 311 dataset is a static file containing 44 records covering downtown Toronto. For other cities or live data, replace `data/toronto-311.json` or implement a real API client in `src/lib/api/complaints.ts`.
-- The forecast engine requires at least three months of history. Below that, it returns the current value with `confidence: 'low'`.
-- Ollama Cloud imposes rate limits on the free tier. Heavy demo traffic can return HTTP 429. For unlimited usage, run Ollama locally and set `OLLAMA_BASE_URL=http://localhost:11434`.
-- Score baselines are tuned for Toronto. Other cities will score lower until the constants in `src/lib/engine/score.ts` are adjusted for the target region.
-- The layout is designed for desktop. Mobile rendering works but is not optimized.
+- 311 dataset is citywide (~100 records across 6 neighborhoods) — not the full Toronto open-data feed. For a live feed, set `TORONTO_311_RESOURCE_ID`.
+- Census coverage is a hand-coded bbox table for ~20 US metros. Other US addresses return `null` and the section is hidden.
+- Forecast requires at least 3 months of history. Below that, it returns the current value with `confidence: 'low'`.
+- Score baselines are tuned for Toronto. Other cities will score lower until `npm run calibrate` is run against a different region.
+- The layout is desktop-first. Mobile renders but is not optimized.
+- Turbopack dev server has a known hot-reload cache bug; use `npm start` for the demo.
 
 ## Tech Stack
 
 | Package | Version | Role |
 |---|---|---|
-| `next` | 16.2.9 | React framework, App Router, Turbopack, route handlers |
+| `next` | 16.2.9 | React framework, App Router, Turbopack |
 | `react` | 19.2.4 | UI runtime |
 | `typescript` | ^5 | Strict mode |
 | `tailwindcss` | ^4 | Styling, `@theme` dark tokens |
-| `maplibre-gl` | ^5.0.0 | Map rendering, no API key required |
-| `recharts` | ^3.9.0 | Forecast line chart |
-| `eslint` | ^9 | Linting with `eslint-config-next` |
-
-Data sources: OpenStreetMap (Overpass and Nominatim), BuildData.ca (Toronto permits), Toronto 311 (static file snapshot), US Census ACS, OpenWeatherMap air pollution, Ollama Cloud. All free tier.
-
-## Acknowledgements
-
-- OpenStreetMap contributors for the global amenity dataset
-- BuildData.ca for Toronto building permit exports
-- City of Toronto for the 311 service request data
-- CARTO for the free dark-matter basemap style
-- Ollama for the local and cloud LLM runtime
-- US Census Bureau for the American Community Survey
-- OpenWeather for the air-quality API
-- FutureHacks 2026 organizers
+| `maplibre-gl` | ^5.0.0 | Map rendering, no API key |
+| `recharts` | ^3.9.0 | Forecast chart |
+| `eslint` | ^9 | Linting |
+| `vitest` | ^4.1.9 | Test runner |
+| `playwright` | ^1.61.1 | E2E screenshots (dev) |
 
 ## License
 
