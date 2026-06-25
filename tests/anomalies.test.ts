@@ -17,7 +17,9 @@ const NEUTRAL: ScoreBreakdown = {
 describe('detectAnomalies', () => {
   it('returns empty array for median-everything neighborhood', () => {
     const ctx = {
+      permitsLast30d: 1,
       permitsLast6m: 5,
+      complaintsLast30d: 0,
       complaintsLast90d: 1,
       amenityCounts: {
         restaurant: 70,
@@ -38,7 +40,9 @@ describe('detectAnomalies', () => {
 
   it('flags high restaurant count as positive anomaly', () => {
     const ctx = {
+      permitsLast30d: 0,
       permitsLast6m: 0,
+      complaintsLast30d: 0,
       complaintsLast90d: 0,
       amenityCounts: {
         restaurant: 800,
@@ -71,7 +75,9 @@ describe('detectAnomalies', () => {
 
   it('sorts anomalies by absolute z-score descending', () => {
     const ctx = {
+      permitsLast30d: 0,
       permitsLast6m: 0,
+      complaintsLast30d: 0,
       complaintsLast90d: 0,
       amenityCounts: {
         restaurant: 800,
@@ -106,7 +112,9 @@ describe('detectAnomalies', () => {
 
   it('uses citywide benchmark as fallback baseline', () => {
     const ctx = {
+      permitsLast30d: 0,
       permitsLast6m: 0,
+      complaintsLast30d: 0,
       complaintsLast90d: 0,
       amenityCounts: {
         restaurant: 0,
@@ -127,7 +135,9 @@ describe('detectAnomalies', () => {
 
   it('omits air quality and census signals when not present', () => {
     const ctx = {
+      permitsLast30d: 0,
       permitsLast6m: 0,
+      complaintsLast30d: 0,
       complaintsLast90d: 0,
       amenityCounts: {
         restaurant: 0,
@@ -146,5 +156,85 @@ describe('detectAnomalies', () => {
     const names = result.map((a) => a.signal);
     expect(names).not.toContain('Air quality (PM2.5)');
     expect(names).not.toContain('Median household income');
+  });
+
+  it('flags permit surge when 30d dramatically exceeds 6m monthly average', () => {
+    const ctx = {
+      permitsLast30d: 18,
+      permitsLast6m: 6,
+      complaintsLast30d: 0,
+      complaintsLast90d: 0,
+      amenityCounts: {
+        restaurant: 30,
+        cafe: 8,
+        school: 2,
+        grocery: 4,
+        park: 4,
+        transit: 20,
+        construction: 2,
+      },
+      scoreBreakdown: NEUTRAL,
+      airQuality: null,
+      census: null,
+    };
+    const result = detectAnomalies(ctx);
+    const surge = result.find((a) => a.signal === 'Permit surge (last 30d)');
+    expect(surge).toBeDefined();
+    expect(Math.abs(surge!.zscore)).toBeGreaterThan(3);
+  });
+
+  it('flags gentrification pressure when permits are high and complaints are low', () => {
+    const ctx = {
+      permitsLast30d: 4,
+      permitsLast6m: 24,
+      complaintsLast30d: 0,
+      complaintsLast90d: 1,
+      amenityCounts: {
+        restaurant: 30,
+        cafe: 8,
+        school: 2,
+        grocery: 4,
+        park: 4,
+        transit: 20,
+        construction: 4,
+      },
+      scoreBreakdown: NEUTRAL,
+      airQuality: null,
+      census: null,
+    };
+    const result = detectAnomalies(ctx);
+    const pressure = result.find(
+      (a) => a.signal === 'Gentrification pressure (permits/complaints)',
+    );
+    expect(pressure).toBeDefined();
+    expect(pressure!.category).toBe('gentrification');
+    expect(pressure!.zscore).toBeGreaterThan(0);
+  });
+
+  it('tags every anomaly with a category', () => {
+    const ctx = {
+      permitsLast30d: 0,
+      permitsLast6m: 0,
+      complaintsLast30d: 0,
+      complaintsLast90d: 0,
+      amenityCounts: {
+        restaurant: 800,
+        cafe: 200,
+        school: 1,
+        grocery: 1,
+        park: 1,
+        transit: 1,
+        construction: 1,
+      },
+      scoreBreakdown: NEUTRAL,
+      airQuality: null,
+      census: null,
+    };
+    const result = detectAnomalies(ctx);
+    for (const a of result) {
+      expect(['gentrification', 'livability', 'quality-of-life', 'environment']).toContain(
+        a.category,
+      );
+    }
   });
 });

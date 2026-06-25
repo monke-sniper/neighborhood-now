@@ -16,6 +16,17 @@ vi.mock('@/lib/api/overpass', () => ({
     landuse: [],
     rawCount: 0,
   })),
+  fetchOverpassWithFallback: vi.fn(async () => ({
+    result: {
+      amenities: [],
+      buildings: [],
+      transit: [],
+      landuse: [],
+      rawCount: 0,
+    },
+    fellBack: false,
+    totalMs: 1,
+  })),
 }));
 
 vi.mock('@/lib/api/builddata', () => ({
@@ -78,15 +89,35 @@ describe('GET /api/report', () => {
       makeReq('http://localhost/api/report?address=test'),
     );
     const body = (await res.json()) as Record<string, unknown>;
-    expect(body).toHaveProperty('address');
-    expect(body).toHaveProperty('coords');
-    expect(body).toHaveProperty('fetchedAt');
-    expect(body).toHaveProperty('score');
-    expect(body).toHaveProperty('amenities');
-    expect(body).toHaveProperty('permits');
-    expect(body).toHaveProperty('complaints');
-    expect(body).toHaveProperty('anomalies');
-    expect(body).toHaveProperty('trends');
-    expect(body).toHaveProperty('sources');
+    for (const f of [
+      'address',
+      'coords',
+      'fetchedAt',
+      'score',
+      'amenities',
+      'permits',
+      'complaints',
+      'anomalies',
+      'trends',
+      'sources',
+      'schoolImpacts',
+    ]) {
+      expect(body).toHaveProperty(f);
+    }
+  });
+
+  it('radius param is respected and falls back to 3000', async () => {
+    const res1 = await GET(
+      makeReq('http://localhost/api/report?address=test&radius=5000'),
+    );
+    const res2 = await GET(
+      makeReq('http://localhost/api/report?address=test&radius=bogus'),
+    );
+    expect(res1.status).toBe(200);
+    expect(res2.status).toBe(200);
+    const b1 = (await res1.json()) as { radiusMeters: number };
+    const b2 = (await res2.json()) as { radiusMeters: number };
+    expect(b1.radiusMeters).toBe(5000);
+    expect(b2.radiusMeters).toBe(3000);
   });
 });

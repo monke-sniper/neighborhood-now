@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { explainAll, tierFor, type ScoreExplanation } from '@/lib/engine/explain';
-import type { Amenity, LivabilityScore, Permit, ScoreBreakdown } from '@/lib/types';
+import { explainAll, tierFor } from '@/lib/engine/explain';
+import type { Amenity, LivabilityScore, ScoreBreakdown } from '@/lib/types';
 
 function makeAmenity(kind: Amenity['kind'], id: string): Amenity {
   return { id, kind, name: 'x', lat: 43.65, lon: -79.38, tags: {} };
