@@ -15,7 +15,11 @@ interface OverpassPayload {
 }
 
 const MAX_RESPONSE_BYTES = 50 * 1024 * 1024;
-const PER_CATEGORY_CAP = 5000;
+const PER_CATEGORY_CAP = 2000;
+export const PER_CATEGORY_CAP_PUBLIC = PER_CATEGORY_CAP;
+const PRIMARY_TIMEOUT_MS = 7000;
+const FALLBACK_TIMEOUT_MS = 4000;
+const FALLBACK_RADIUS = 1000;
 
 export function buildOverpassQuery(center: LatLon, radiusMeters: number): string {
   const r = radiusMeters;
@@ -23,16 +27,15 @@ export function buildOverpassQuery(center: LatLon, radiusMeters: number): string
   return (
     `[out:json][timeout:${CONFIG.overpass.timeoutSec}];` +
     `(` +
-    `node["amenity"~"^(restaurant|cafe|fast_food|food_court|bar|pub|ice_cream|biergarten|pharmacy|bank|atm|post_office|school|kindergarten|college|university|library|hospital|clinic|doctors|dentist|police|fire_station|fuel|community_centre|social_facility|events_venue|townhall|courthouse|place_of_worship|recycling|arts_centre|museum|theatre|cinema|car_repair|car_wash|hairdresser|beauty|optician|florist|jewelry|laundry|dry_cleaning)$"]` +
+    `node["amenity"~"^(restaurant|cafe|fast_food|bar|pub|ice_cream|pharmacy|bank|atm|post_office|school|kindergarten|college|university|library|hospital|clinic|doctors|dentist|police|fuel|community_centre|townhall|courthouse|place_of_worship|arts_centre|museum|theatre|cinema|car_repair|car_wash|hairdresser|beauty|optician|florist|jewelry|laundry|dry_cleaning)$"]` +
     `(around:${r},${lat},${lon});` +
-    `node["shop"~"^(supermarket|convenience|mall|pharmacy|bakery|butcher|greengrocer|hairdresser|beauty|optician|books|florist|jewelry|laundry)$"]` +
+    `node["shop"~"^(supermarket|convenience|mall|pharmacy|bakery|butcher|greengrocer|books|florist|jewelry|laundry)$"]` +
     `(around:${r},${lat},${lon});` +
     `node["leisure"~"^(park|garden|nature_reserve|playground|sports_centre|fitness_centre|swimming_pool|pitch|golf_course|dog_park)$"]` +
     `(around:${r},${lat},${lon});` +
-    `node["highway"="bus_stop"](around:${r},${lat},${lon});` +
     `node["public_transport"~"^(station|stop_position|platform)$"]` +
     `(around:${r},${lat},${lon});` +
-    `node["railway"~"^(station|subway_entrance|tram_stop|light_rail|halt)$"]` +
+    `node["railway"~"^(station|subway_entrance|tram_stop|light_rail)$"]` +
     `(around:${r},${lat},${lon});` +
     `way["leisure"~"^(park|garden|nature_reserve|playground|sports_centre|fitness_centre|swimming_pool|pitch|golf_course|dog_park)$"]` +
     `(around:${r},${lat},${lon});` +
@@ -292,4 +295,82 @@ export async function fetchOverpass(
     lastError = `${url}: ${result.error}`;
   }
   throw new Error(`All Overpass mirrors failed. Last error: ${lastError}`);
+}
+
+export type OverpassFetchResult = {
+  result: OverpassResponse;
+  fellBack: boolean;
+  totalMs: number;
+  primaryError?: string;
+  fallbackError?: string;
+};
+
+const EMPTY_OVERPASS: OverpassResponse = {
+  amenities: [],
+  buildings: [],
+  transit: [],
+  landuse: [],
+  rawCount: 0,
+};
+
+export async function fetchOverpassWithFallback(
+  center: LatLon,
+  radiusMeters: number = CONFIG.overpass.defaultRadius,
+): Promise<OverpassFetchResult> {
+  const t0 = Date.now();
+  let primaryTimer: ReturnType<typeof setTimeout> | undefined;
+  let fallbackTimer: ReturnType<typeof setTimeout> | undefined;
+  const primary = new Promise<OverpassResponse>((resolve, reject) => {
+    primaryTimer = setTimeout(
+      () => reject(new Error(`primary timeout ${PRIMARY_TIMEOUT_MS}ms`)),
+      PRIMARY_TIMEOUT_MS,
+    );
+    fetchOverpass(center, radiusMeters).then(
+      (v) => resolve(v),
+      (e) => reject(e instanceof Error ? e : new Error(String(e))),
+    );
+  });
+  try {
+    const result = await primary;
+    if (primaryTimer) clearTimeout(primaryTimer);
+    return { result, fellBack: false, totalMs: Date.now() - t0 };
+  } catch (primaryError) {
+    if (primaryTimer) clearTimeout(primaryTimer);
+    const primaryMsg =
+      primaryError instanceof Error ? primaryError.message : String(primaryError);
+    const fallbackRadius = Math.min(FALLBACK_RADIUS, radiusMeters);
+    const fallback = new Promise<OverpassResponse>((resolve, reject) => {
+      fallbackTimer = setTimeout(
+        () => reject(new Error(`fallback timeout ${FALLBACK_TIMEOUT_MS}ms`)),
+        FALLBACK_TIMEOUT_MS,
+      );
+      fetchOverpass(center, fallbackRadius).then(
+        (v) => resolve(v),
+        (e) => reject(e instanceof Error ? e : new Error(String(e))),
+      );
+    });
+    try {
+      const result = await fallback;
+      if (fallbackTimer) clearTimeout(fallbackTimer);
+      return {
+        result,
+        fellBack: true,
+        totalMs: Date.now() - t0,
+        primaryError: primaryMsg,
+      };
+    } catch (fallbackError) {
+      if (fallbackTimer) clearTimeout(fallbackTimer);
+      const fallbackMsg =
+        fallbackError instanceof Error
+          ? fallbackError.message
+          : String(fallbackError);
+      return {
+        result: EMPTY_OVERPASS,
+        fellBack: true,
+        totalMs: Date.now() - t0,
+        primaryError: primaryMsg,
+        fallbackError: fallbackMsg,
+      };
+    }
+  }
 }

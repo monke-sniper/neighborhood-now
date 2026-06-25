@@ -6,6 +6,7 @@ import { clientHeaders } from '@/lib/api/client';
 
 interface Props {
   onReport: (r: NeighborhoodReport) => void;
+  onLoadingChange?: (loading: boolean) => void;
   radius: number;
   hasReport?: boolean;
 }
@@ -17,29 +18,79 @@ const EXAMPLE_ADDRESSES = [
   'SCARBOROUGH TOWN CENTRE, TORONTO',
 ];
 
-export function AddressInput({ onReport, radius, hasReport }: Props) {
+const RETRYABLE_STATUS = new Set([502, 503, 504, 0]);
+const RETRY_BACKOFF_MS = 1500;
+const MAX_AUTO_RETRIES = 1;
+
+function formatPhase(stage: 'idle' | 'fetching' | 'retrying' | 'failed'): string {
+  if (stage === 'fetching') return 'FETCHING OSM / PERMITS / 311…';
+  if (stage === 'retrying') return 'RETRYING…';
+  if (stage === 'failed') return 'NETWORK ERROR';
+  return '';
+}
+
+export function AddressInput({ onReport, onLoadingChange, radius, hasReport }: Props) {
   const [value, setValue] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [phase, setPhase] = useState<'idle' | 'fetching' | 'retrying' | 'failed'>(
+    'idle',
+  );
+  const [attempts, setAttempts] = useState(0);
 
-  async function fetchReport(addr: string) {
-    setLoading(true);
+  function setLoadingState(next: boolean) {
+    setLoading(next);
+    onLoadingChange?.(next);
+  }
+
+  async function fetchReportOnce(addr: string): Promise<NeighborhoodReport> {
+    const res = await fetch(
+      `/api/report?address=${encodeURIComponent(addr)}&radius=${radius}`,
+      { headers: clientHeaders() },
+    );
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        errors?: Record<string, string | null>;
+      };
+      const err = new Error(
+        data.error || `Request failed (${res.status})`,
+      ) as Error & { status?: number; sourceErrors?: Record<string, string | null> };
+      err.status = res.status;
+      err.sourceErrors = data.errors;
+      throw err;
+    }
+    return (await res.json()) as NeighborhoodReport;
+  }
+
+  function isRetryable(err: unknown): boolean {
+    if (!err || typeof err !== 'object') return false;
+    const status = (err as { status?: number }).status;
+    if (typeof status === 'number' && RETRYABLE_STATUS.has(status)) return true;
+    const msg = (err as Error).message ?? '';
+    return /failed|abort|timeout|network|fetch/i.test(msg);
+  }
+
+  async function fetchReport(addr: string, attempt = 0): Promise<void> {
     setError(null);
+    setLoadingState(true);
+    setPhase(attempt === 0 ? 'fetching' : 'retrying');
+    setAttempts(attempt + 1);
     try {
-      const res = await fetch(
-        `/api/report?address=${encodeURIComponent(addr)}&radius=${radius}`,
-        { headers: clientHeaders() },
-      );
-      if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(data.error || `Request failed (${res.status})`);
-      }
-      const report = (await res.json()) as NeighborhoodReport;
+      const report = await fetchReportOnce(addr);
       onReport(report);
+      setPhase('idle');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Request failed');
+      const shouldRetry = attempt < MAX_AUTO_RETRIES && isRetryable(err);
+      if (shouldRetry) {
+        await new Promise((r) => setTimeout(r, RETRY_BACKOFF_MS));
+        return fetchReport(addr, attempt + 1);
+      }
+      const msg = err instanceof Error ? err.message : 'Request failed';
+      setError(msg);
+      setPhase('failed');
     } finally {
-      setLoading(false);
+      setLoadingState(false);
     }
   }
 
@@ -52,6 +103,12 @@ export function AddressInput({ onReport, radius, hasReport }: Props) {
 
   function tryExample(addr: string) {
     setValue(addr);
+    void fetchReport(addr);
+  }
+
+  function manualRetry() {
+    const addr = value.trim();
+    if (!addr) return;
     void fetchReport(addr);
   }
 
@@ -77,7 +134,16 @@ export function AddressInput({ onReport, radius, hasReport }: Props) {
           {loading ? '[ FETCHING… ]' : '[ ANALYZE ]'}
         </button>
       </div>
-      {!hasReport && (
+      {loading && (
+        <div className="flex items-center gap-2 text-[10px] text-[var(--color-warn)] uppercase tracking-wider">
+          <span className="inline-block w-2 h-2 bg-[var(--color-warn)] animate-pulse" />
+          <span>
+            {formatPhase(phase)}
+            {attempts > 1 ? ` [ ATTEMPT ${attempts} ]` : ''}
+          </span>
+        </div>
+      )}
+      {!hasReport && !loading && (
         <div className="flex flex-wrap items-center gap-2 text-[10px] text-[var(--color-text-mute)] uppercase tracking-wider">
           <span>&gt; TRY:</span>
           {EXAMPLE_ADDRESSES.map((a) => (
@@ -94,8 +160,15 @@ export function AddressInput({ onReport, radius, hasReport }: Props) {
         </div>
       )}
       {error && (
-        <div className="text-xs text-[var(--color-bad)] px-1 uppercase tracking-wider">
-          [ ERR ] {error}
+        <div className="flex items-center gap-3 text-xs text-[var(--color-bad)] px-1 uppercase tracking-wider">
+          <span>[ ERR ] {error}</span>
+          <button
+            type="button"
+            onClick={manualRetry}
+            className="px-2 py-0.5 border border-[var(--color-bad)] text-[var(--color-bad)] hover:bg-[var(--color-bad)] hover:text-black transition"
+          >
+            [ RETRY ]
+          </button>
         </div>
       )}
     </form>

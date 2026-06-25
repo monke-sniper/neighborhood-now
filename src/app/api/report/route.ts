@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { geocode } from '@/lib/api/nominatim';
-import { fetchOverpass } from '@/lib/api/overpass';
+import { fetchOverpassWithFallback } from '@/lib/api/overpass';
 import { fetchPermits } from '@/lib/api/builddata';
 import { fetchComplaints } from '@/lib/api/complaints';
 import { fetchCensus } from '@/lib/api/census';
@@ -96,20 +96,40 @@ export async function GET(req: Request): Promise<NextResponse> {
     const weatherKey = req.headers.get('X-Weather-Key') ?? '';
 
     const [o, p, c, ce, w] = await Promise.all([
-      timed(() => fetchOverpass(geo, radius)),
+      timed(() => fetchOverpassWithFallback(geo, radius)),
       timed(() => fetchPermits(geo, radius)),
       timed(() => fetchComplaints(geo, radius)),
       timed(() => fetchCensus(geo, censusKey)),
       timed(() => fetchAirQuality(geo, weatherKey)),
     ]);
 
-    const amenities = o.ok
+    const oValue = o.ok
       ? o.value
-      : { amenities: [], buildings: [], transit: [], landuse: [], rawCount: 0 };
+      : {
+          result: {
+            amenities: [],
+            buildings: [],
+            transit: [],
+            landuse: [],
+            rawCount: 0,
+          },
+          fellBack: true,
+          totalMs: o.ms,
+        };
+    const amenities = oValue.result;
+    const amenitiesOk = o.ok && !oValue.fellBack && amenities.amenities.length > 0;
     const permits = p.ok ? p.value : [];
     const complaints = c.ok ? c.value : [];
     const census = ce.ok ? ce.value : null;
     const airQuality = w.ok ? w.value : null;
+
+    const errorMap: Record<string, string | null> = {
+      overpass: o.ok ? null : o.error,
+      builddata: p.ok ? null : p.error,
+      complaints: c.ok ? null : c.error,
+      census: ce.ok ? null : ce.error,
+      weather: w.ok ? null : w.error,
+    };
 
     log.info('report.fetched', {
       address: cacheKey,
@@ -126,6 +146,7 @@ export async function GET(req: Request): Promise<NextResponse> {
         complaints: complaints.length,
         overpassRaw: amenities.rawCount,
       },
+      fellBack: oValue.fellBack,
     });
 
     const breakdown = computeBreakdown(amenities.amenities, permits, radius);
@@ -214,12 +235,13 @@ export async function GET(req: Request): Promise<NextResponse> {
       anomalies,
       trends,
       sources: {
-        overpass: o.ok ? 'ok' : 'failed',
+        overpass: amenitiesOk ? 'ok' : o.ok ? 'partial' : 'failed',
         builddata: p.ok ? 'ok' : 'failed',
         complaints: c.ok ? 'ok' : 'failed',
         census: ce.ok ? 'ok' : 'failed',
         weather: w.ok ? 'ok' : 'failed',
       },
+      errors: errorMap,
     };
 
     if (debug) {

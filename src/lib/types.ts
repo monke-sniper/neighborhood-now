@@ -159,6 +159,7 @@ export interface NeighborhoodReport {
     census: 'ok' | 'failed' | 'skipped';
     weather: 'ok' | 'failed' | 'skipped';
   };
+  errors?: Record<string, string | null>;
 }
 
 export interface ChatRequest {

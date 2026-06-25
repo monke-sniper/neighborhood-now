@@ -10,6 +10,7 @@ import { MapView } from '@/components/MapView';
 import { RadiusSelect } from '@/components/RadiusSelect';
 import { RecommendationsPanel } from '@/components/RecommendationsPanel';
 import { ReportCard } from '@/components/ReportCard';
+import { ReportSkeleton } from '@/components/ReportSkeleton';
 import { SchoolsPanel } from '@/components/SchoolsPanel';
 import { SettingsPanel } from '@/components/SettingsPanel';
 import { WhatIfSimulator } from '@/components/WhatIfSimulator';
@@ -47,6 +48,7 @@ export default function Home() {
   const [report, setReport] = useState<NeighborhoodReport | null>(null);
   const [now, setNow] = useState<Date>(() => new Date());
   const [status, setStatus] = useState<Status>('IDLE');
+  const [loading, setLoading] = useState(false);
   const [activeScenarios, setActiveScenarios] = useState<Set<string>>(new Set());
   const [radius, setRadius] = useState<number>(CONFIG.overpass.defaultRadius);
 
@@ -121,16 +123,20 @@ export default function Home() {
         <AddressInput
           radius={radius}
           hasReport={Boolean(report)}
+          onLoadingChange={setLoading}
           onReport={(r) => {
             setReport(r);
             setStatus('LIVE');
+            setLoading(false);
           }}
         />
         <RadiusSelect value={radius} onChange={setRadius} />
         <SettingsPanel />
       </header>
 
-      {!report ? (
+      {loading ? (
+        <ReportSkeleton />
+      ) : !report ? (
         <div className="text-[var(--color-text-mute)] text-xs uppercase tracking-widest text-center py-20 border border-dashed border-[var(--color-border)]">
           [ IDLE // ENTER AN ADDRESS TO BEGIN ANALYSIS ]
         </div>
