@@ -7,8 +7,6 @@ export interface AirQuality {
   pm10: number;
 }
 
-const OPENWEATHER_KEY = process.env.OPENWEATHER_KEY ?? '';
-
 interface OpenWeatherPayload {
   list?: Array<{
     main: { aqi: number };
@@ -16,11 +14,15 @@ interface OpenWeatherPayload {
   }>;
 }
 
-export async function fetchAirQuality(coords: LatLon): Promise<AirQuality | null> {
-  if (!OPENWEATHER_KEY) return null;
+export async function fetchAirQuality(
+  coords: LatLon,
+  apiKey?: string,
+): Promise<AirQuality | null> {
+  const key = apiKey ?? process.env.OPENWEATHER_KEY ?? '';
+  if (!key) return null;
   const url =
     `${CONFIG.openweather.base}/air_pollution` +
-    `?lat=${coords.lat}&lon=${coords.lon}&appid=${OPENWEATHER_KEY}`;
+    `?lat=${coords.lat}&lon=${coords.lon}&appid=${key}`;
   try {
     const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) return null;

@@ -110,6 +110,7 @@ export interface Scenario {
   name: string;
   emoji: string;
   description: string;
+  reason: string;
   impact: {
     amenityDensity?: number | ((current: ScoreBreakdown) => number);
     transitScore?: number | ((current: ScoreBreakdown) => number);
@@ -153,5 +154,22 @@ export interface ChatRequest {
 
 export interface ChatResponse {
   answer: string;
+  modelUsed: string;
+}
+
+export interface Recommendation {
+  id: string;
+  title: string;
+  reasoning: string;
+  scenarioId: string;
+  expectedDelta: number;
+}
+
+export interface RecommendationRequest {
+  report: NeighborhoodReport;
+}
+
+export interface RecommendationResponse {
+  recommendations: Recommendation[];
   modelUsed: string;
 }

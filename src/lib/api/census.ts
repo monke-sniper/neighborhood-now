@@ -5,8 +5,6 @@ export interface CensusDemographics {
   population: number;
 }
 
-const CENSUS_KEY = process.env.CENSUS_KEY ?? '';
-
 function isInUS(coords: LatLon): boolean {
   return (
     coords.lat >= 24 &&
@@ -16,8 +14,12 @@ function isInUS(coords: LatLon): boolean {
   );
 }
 
-export async function fetchCensus(coords: LatLon): Promise<CensusDemographics | null> {
-  if (!CENSUS_KEY) return null;
+export async function fetchCensus(
+  coords: LatLon,
+  apiKey?: string,
+): Promise<CensusDemographics | null> {
+  const key = apiKey ?? process.env.CENSUS_KEY ?? '';
+  if (!key) return null;
   if (!isInUS(coords)) return null;
   return null;
 }

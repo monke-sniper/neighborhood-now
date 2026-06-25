@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { NeighborhoodReport } from '@/lib/types';
+import { clientHeaders } from '@/lib/api/client';
 
 interface Props {
   onReport: (r: NeighborhoodReport) => void;
@@ -21,6 +22,7 @@ export function AddressInput({ onReport }: Props) {
     try {
       const res = await fetch(
         `/api/report?address=${encodeURIComponent(addr)}`,
+        { headers: clientHeaders() },
       );
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string };

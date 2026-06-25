@@ -1,14 +1,20 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AddressInput } from '@/components/AddressInput';
+import { AmenityList } from '@/components/AmenityList';
 import { AnomalyList } from '@/components/AnomalyList';
 import { ChatBox } from '@/components/ChatBox';
 import { ForecastChart } from '@/components/ForecastChart';
 import { MapView } from '@/components/MapView';
+import { RecommendationsPanel } from '@/components/RecommendationsPanel';
 import { ReportCard } from '@/components/ReportCard';
+import { SchoolsPanel } from '@/components/SchoolsPanel';
+import { SettingsPanel } from '@/components/SettingsPanel';
 import { WhatIfSimulator } from '@/components/WhatIfSimulator';
-import type { NeighborhoodReport } from '@/lib/types';
+import { simulateWhatIf, SCENARIOS } from '@/lib/engine/whatif';
+import { computeTotal } from '@/lib/engine/score';
+import type { NeighborhoodReport, ScoreBreakdown } from '@/lib/types';
 
 type Status = 'IDLE' | 'FETCHING' | 'LIVE' | 'ERROR';
 
@@ -16,15 +22,43 @@ function formatTime(d: Date): string {
   return d.toISOString().slice(11, 19) + 'Z';
 }
 
+function applyScenarios(
+  current: ScoreBreakdown,
+  active: Set<string>,
+): { breakdown: ScoreBreakdown; total: number; delta: number } {
+  if (active.size === 0) {
+    const t = computeTotal(current).total;
+    return { breakdown: current, total: t, delta: 0 };
+  }
+  let modified: ScoreBreakdown = { ...current };
+  for (const id of active) {
+    const s = SCENARIOS.find((x) => x.id === id);
+    if (!s) continue;
+    modified = simulateWhatIf(modified, s).modifiedBreakdown;
+  }
+  const before = computeTotal(current).total;
+  const after = computeTotal(modified).total;
+  return { breakdown: modified, total: after, delta: after - before };
+}
+
 export default function Home() {
   const [report, setReport] = useState<NeighborhoodReport | null>(null);
   const [now, setNow] = useState<Date>(() => new Date());
   const [status, setStatus] = useState<Status>('IDLE');
+  const [activeScenarios, setActiveScenarios] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
+
+  const whatIf = useMemo(
+    () =>
+      report
+        ? applyScenarios(report.score.breakdown, activeScenarios)
+        : null,
+    [report, activeScenarios],
+  );
 
   return (
     <main className="min-h-screen w-full max-w-7xl mx-auto px-4 py-4 flex flex-col gap-4 bg-black text-[var(--color-text)]">
@@ -87,6 +121,7 @@ export default function Home() {
             setStatus('LIVE');
           }}
         />
+        <SettingsPanel />
       </header>
 
       {!report ? (
@@ -97,15 +132,43 @@ export default function Home() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="flex flex-col gap-4">
             <MapView coords={report.coords} permits={report.permits} />
-            <ReportCard report={report} />
+            <ReportCard
+              report={report}
+              modified={whatIf && activeScenarios.size > 0 ? whatIf : null}
+            />
+            <AmenityList report={report} />
             <div className="text-[10px] text-[var(--color-text-mute)] px-1 uppercase tracking-wider truncate">
               [ LOC ] {report.address}
             </div>
           </div>
           <div className="flex flex-col gap-4">
             <AnomalyList anomalies={report.anomalies} />
+            <SchoolsPanel report={report} />
             <ForecastChart trends={report.trends} />
-            <WhatIfSimulator current={report.score.breakdown} />
+            <RecommendationsPanel
+              report={report}
+              activeScenarios={activeScenarios}
+              onActivate={(id) =>
+                setActiveScenarios((prev) => {
+                  if (prev.has(id)) return prev;
+                  const next = new Set(prev);
+                  next.add(id);
+                  return next;
+                })
+              }
+            />
+            <WhatIfSimulator
+              current={report.score.breakdown}
+              active={activeScenarios}
+              onToggle={(id) =>
+                setActiveScenarios((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(id)) next.delete(id);
+                  else next.add(id);
+                  return next;
+                })
+              }
+            />
             <ChatBox report={report} />
           </div>
         </div>

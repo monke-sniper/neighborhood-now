@@ -1,12 +1,60 @@
 import { NextResponse } from 'next/server';
-import type { ChatRequest, ChatResponse, NeighborhoodReport } from '@/lib/types';
+import type {
+  Amenity,
+  AmenityKind,
+  ChatRequest,
+  ChatResponse,
+  NeighborhoodReport,
+} from '@/lib/types';
+import { haversineMeters } from '@/lib/utils/geo';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const OLLAMA_BASE = process.env.OLLAMA_BASE_URL || 'https://ollama.com';
-const OLLAMA_KEY = process.env.OLLAMA_API_KEY || '';
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'gpt-oss:20b';
+const DEFAULT_OLLAMA_BASE = process.env.OLLAMA_BASE_URL || 'https://ollama.com';
+const DEFAULT_OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'gpt-oss:20b';
+const SERVER_OLLAMA_KEY = process.env.OLLAMA_API_KEY || '';
+
+const NAMED_PER_KIND: Partial<Record<AmenityKind, number>> = {
+  restaurant: 10,
+  school: 5,
+  grocery: 5,
+  park: 5,
+  cafe: 5,
+  construction: 3,
+};
+
+function pickName(a: Amenity): string | null {
+  const t = a.tags ?? {};
+  return t.name ?? t['name:en'] ?? t.brand ?? t.operator ?? null;
+}
+
+function namedByKind(
+  amenities: Amenity[],
+  center: NeighborhoodReport['coords'],
+): Record<string, Array<{ name: string; kind: AmenityKind; distanceKm: number }>> {
+  const grouped = new Map<AmenityKind, Amenity[]>();
+  for (const a of amenities) {
+    const name = pickName(a);
+    if (!name) continue;
+    const arr = grouped.get(a.kind) ?? [];
+    arr.push(a);
+    grouped.set(a.kind, arr);
+  }
+  const out: Record<string, Array<{ name: string; kind: AmenityKind; distanceKm: number }>> = {};
+  for (const [kind, items] of grouped) {
+    const limit = NAMED_PER_KIND[kind] ?? 5;
+    items.sort(
+      (a, b) => haversineMeters(a, center) - haversineMeters(b, center),
+    );
+    out[kind] = items.slice(0, limit).map((a) => ({
+      name: pickName(a)!,
+      kind,
+      distanceKm: Number((haversineMeters(a, center) / 1000).toFixed(2)),
+    }));
+  }
+  return out;
+}
 
 function systemPrompt(report: NeighborhoodReport): string {
   const safe = JSON.stringify(
@@ -17,6 +65,7 @@ function systemPrompt(report: NeighborhoodReport): string {
         count: report.amenities.amenities.length,
         transit: report.amenities.transit.length,
         buildings: report.amenities.buildings.length,
+        named: namedByKind(report.amenities.amenities, report.coords),
       },
       permits: report.permits.length,
       recentPermits: report.permits.slice(0, 5).map((p) => ({
@@ -59,23 +108,27 @@ export async function POST(req: Request): Promise<NextResponse<ChatResponse | { 
     );
   }
 
-  if (!OLLAMA_KEY) {
+  const ollamaKey = req.headers.get('X-Ollama-Key') ?? SERVER_OLLAMA_KEY;
+  const ollamaBase = req.headers.get('X-Ollama-Base') ?? DEFAULT_OLLAMA_BASE;
+  const ollamaModel = req.headers.get('X-Ollama-Model') ?? DEFAULT_OLLAMA_MODEL;
+
+  if (!ollamaKey) {
     return NextResponse.json({
       answer:
-        'AI chat is not configured. Set OLLAMA_API_KEY in .env.local to enable.',
+        'AI chat is not configured. Set OLLAMA_API_KEY in .env.local or in the Settings panel.',
       modelUsed: 'stub',
     });
   }
 
   try {
-    const res = await fetch(`${OLLAMA_BASE}/api/chat`, {
+    const res = await fetch(`${ollamaBase}/api/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${OLLAMA_KEY}`,
+        Authorization: `Bearer ${ollamaKey}`,
       },
       body: JSON.stringify({
-        model: OLLAMA_MODEL,
+        model: ollamaModel,
         stream: false,
         messages: [
           { role: 'system', content: systemPrompt(body.report) },
@@ -88,7 +141,7 @@ export async function POST(req: Request): Promise<NextResponse<ChatResponse | { 
     if (!res.ok) {
       return NextResponse.json({
         answer: `AI provider error (${res.status}). Please try again.`,
-        modelUsed: OLLAMA_MODEL,
+        modelUsed: ollamaModel,
       });
     }
 
@@ -96,9 +149,9 @@ export async function POST(req: Request): Promise<NextResponse<ChatResponse | { 
       message?: { content?: string };
     };
     const answer = data.message?.content?.trim() || 'No response from model.';
-    return NextResponse.json({ answer, modelUsed: OLLAMA_MODEL });
+    return NextResponse.json({ answer, modelUsed: ollamaModel });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'AI request failed';
-    return NextResponse.json({ answer: message, modelUsed: OLLAMA_MODEL });
+    return NextResponse.json({ answer: message, modelUsed: ollamaModel });
   }
 }

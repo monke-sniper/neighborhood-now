@@ -1,10 +1,18 @@
-import type { NeighborhoodReport } from '@/lib/types';
+import type { NeighborhoodReport, ScoreBreakdown } from '@/lib/types';
+import { computeRanking } from '@/lib/engine/score';
+
+interface ModifiedView {
+  breakdown: ScoreBreakdown;
+  total: number;
+  delta: number;
+}
 
 interface Props {
   report: NeighborhoodReport;
+  modified?: ModifiedView | null;
 }
 
-const LABELS: Record<keyof NeighborhoodReport['score']['breakdown'], string> = {
+const LABELS: Record<keyof ScoreBreakdown, string> = {
   amenityDensity: 'AMENITY DENSITY',
   transitScore: 'TRANSIT ACCESS',
   foodAccess: 'FOOD ACCESS',
@@ -24,7 +32,19 @@ function barColorFor(score: number): string {
   return 'bg-[var(--color-bad)]';
 }
 
-export function ReportCard({ report }: Props) {
+function deltaColor(d: number): string {
+  if (d > 0) return 'text-[var(--color-accent)]';
+  if (d < 0) return 'text-[var(--color-bad)]';
+  return 'text-[var(--color-text-mute)]';
+}
+
+function deltaSign(d: number): string {
+  if (d > 0) return `+${d}`;
+  if (d < 0) return `${d}`;
+  return '±0';
+}
+
+export function ReportCard({ report, modified }: Props) {
   const { score, amenities, permits, complaints, sources } = report;
   const counts = {
     restaurants: amenities.amenities.filter((a) => a.kind === 'restaurant').length,
@@ -38,11 +58,17 @@ export function ReportCard({ report }: Props) {
       ).length + amenities.transit.length,
   };
 
+  const isModified = Boolean(modified);
+  const totalShown = modified ? modified.total : score.total;
+  const totalOriginal = score.total;
+
   return (
-    <div className="flex flex-col gap-4 p-4 border border-[var(--color-border)] bg-[var(--color-surface)]">
+    <div className={`flex flex-col gap-4 p-4 border bg-[var(--color-surface)] ${
+      isModified ? 'border-[var(--color-accent)]' : 'border-[var(--color-border)]'
+    }`}>
       <div className="flex items-center justify-between border-b border-[var(--color-border)] pb-2">
         <h2 className="text-xs uppercase tracking-widest text-[var(--color-accent)] font-semibold">
-          [ LIVABILITY SCORE ]
+          [ LIVABILITY SCORE{isModified ? ' // WHAT-IF' : ''} ]
         </h2>
         <div className="text-[10px] text-[var(--color-text-mute)] uppercase tracking-wider">
           CITY_AVG {score.cityAverage}
@@ -50,37 +76,61 @@ export function ReportCard({ report }: Props) {
       </div>
 
       <div className="flex items-baseline gap-3">
-        <div className={`text-6xl font-bold ${colorFor(score.total)} tabular-nums leading-none`}>
-          {score.total}
+        <div className={`text-6xl font-bold ${colorFor(totalShown)} tabular-nums leading-none transition-colors`}>
+          {totalShown}
         </div>
         <div className="text-[var(--color-text-mute)] text-sm">/100</div>
+        {isModified && (
+          <div className="flex flex-col text-xs">
+            <div className="text-[var(--color-text-mute)] line-through tabular-nums">
+              {totalOriginal}
+            </div>
+            <div className={`${deltaColor(modified!.delta)} font-semibold tabular-nums`}>
+              {deltaSign(modified!.delta)} pts
+            </div>
+          </div>
+        )}
         <div className="ml-auto text-right">
           <div className="text-[10px] text-[var(--color-text-mute)] uppercase tracking-widest">
             RANK
           </div>
-          <div className={`text-sm font-semibold ${colorFor(score.total)} uppercase`}>
-            {score.ranking.label}
+          <div className={`text-sm font-semibold ${colorFor(totalShown)} uppercase`}>
+            {(modified ? computeRanking(totalShown).label : score.ranking.label)}
           </div>
         </div>
       </div>
 
       <div className="flex flex-col gap-2">
-        {Object.entries(score.breakdown).map(([k, v]) => {
-          const key = k as keyof typeof score.breakdown;
+        {(Object.keys(LABELS) as (keyof ScoreBreakdown)[]).map((key) => {
+          const v = score.breakdown[key];
+          const v2 = modified?.breakdown[key] ?? v;
+          const d = v2 - v;
+          const changed = d !== 0;
           return (
-            <div key={k} className="flex items-center gap-3 text-xs">
+            <div key={key} className="flex items-center gap-3 text-xs">
               <div className="w-32 text-[var(--color-text-dim)] uppercase tracking-wider truncate">
                 {LABELS[key]}
               </div>
-              <div className="flex-1 h-1.5 bg-[var(--color-surface-3)] overflow-hidden">
+              <div className="flex-1 h-1.5 bg-[var(--color-surface-3)] overflow-hidden relative">
                 <div
                   className={`h-full ${barColorFor(v)} transition-all`}
-                  style={{ width: `${v}%` }}
+                  style={{ width: `${v}%`, opacity: changed ? 0.3 : 1 }}
                 />
+                {changed && (
+                  <div
+                    className={`absolute top-0 left-0 h-full ${barColorFor(v2)} transition-all`}
+                    style={{ width: `${v2}%` }}
+                  />
+                )}
               </div>
               <div className="w-10 text-right text-[var(--color-text)] tabular-nums">
-                {String(v).padStart(3, '0')}
+                {String(v2).padStart(3, '0')}
               </div>
+              {changed && (
+                <div className={`w-12 text-right ${deltaColor(d)} tabular-nums text-[10px]`}>
+                  {deltaSign(d)}
+                </div>
+              )}
             </div>
           );
         })}
@@ -135,3 +185,4 @@ export function ReportCard({ report }: Props) {
     </div>
   );
 }
+

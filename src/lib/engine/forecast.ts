@@ -154,12 +154,15 @@ export function forecastTrend(
     residuals.push(history[i]! - pred);
   }
   const sigma = std(residuals);
+  const FLOOR_RATIO = 0.7;
+  const floor = last * FLOOR_RATIO;
   const band = (steps: number, mult: number) => {
-    const value = clamp(last + slope * steps);
+    const olsValue = last + slope * steps;
+    const value = clamp(Math.max(floor, olsValue));
     const margin = sigma * mult;
     return {
       value,
-      low: clamp(value - margin),
+      low: clamp(Math.max(0, value - margin)),
       high: clamp(value + margin),
     };
   };

@@ -44,6 +44,8 @@ export const SCENARIOS: readonly Scenario[] = [
     emoji: 'M',
     description: 'Major transit expansion within 1km',
     impact: { transitScore: transitDelta, amenityDensity: 5 },
+    reason:
+      'Adds a major transit node. Marginal utility is highest in transit-poor areas, so the boost scales with how weak the current transit score is.',
   },
   {
     id: 'park',
@@ -51,6 +53,8 @@ export const SCENARIOS: readonly Scenario[] = [
     emoji: 'P',
     description: 'Green space added within 500m',
     impact: { greenSpace: greenDelta, amenityDensity: 3 },
+    reason:
+      'New green space within walking distance. Larger boost in park-poor areas, smaller boost where green space is already abundant.',
   },
   {
     id: 'development',
@@ -62,6 +66,8 @@ export const SCENARIOS: readonly Scenario[] = [
       transitScore: 5,
       development: devDelta,
     },
+    reason:
+      'Brings residents and ground-floor retail. Drives development activity up; adds amenity and transit demand. Larger delta in underdeveloped blocks.',
   },
   {
     id: 'grocery',
@@ -69,6 +75,8 @@ export const SCENARIOS: readonly Scenario[] = [
     emoji: 'G',
     description: 'Full-service supermarket opens',
     impact: { foodAccess: foodDelta },
+    reason:
+      'Eliminates food-desert risk. Largest delta where food access is currently weakest, smaller delta where the area is already well-served.',
   },
   {
     id: 'school',
@@ -76,6 +84,8 @@ export const SCENARIOS: readonly Scenario[] = [
     emoji: 'S',
     description: 'Elementary or middle school opens nearby',
     impact: { amenityDensity: schoolDelta, development: 5 },
+    reason:
+      'Adds family-serving amenity density and signals a stable, long-term neighborhood. Larger boost in amenity-thin areas.',
   },
   {
     id: 'transit_strike',
@@ -83,6 +93,8 @@ export const SCENARIOS: readonly Scenario[] = [
     emoji: 'X',
     description: 'Subway + bus suspended for a quarter',
     impact: { transitScore: -25, development: -5 },
+    reason:
+      'Removes transit access temporarily. Larger absolute hit in transit-dependent areas; the development activity dip reflects reduced foot traffic.',
   },
 ] as const;
 

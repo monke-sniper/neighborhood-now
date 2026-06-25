@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { ChatResponse, NeighborhoodReport } from '@/lib/types';
+import { clientHeaders } from '@/lib/api/client';
 
 interface Props {
   report: NeighborhoodReport;
@@ -27,7 +28,7 @@ export function ChatBox({ report }: Props) {
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: clientHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ question: q, report }),
       });
       const data = (await res.json()) as ChatResponse;

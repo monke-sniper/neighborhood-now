@@ -57,6 +57,25 @@ describe('forecastTrend', () => {
     );
   });
 
+  it('hard-floors forecast at 70% of last value (never drops >30%)', () => {
+    const r = forecastTrend(
+      [10, 8, 6, 4, 2, 1, 0.5, 0.3, 0.2, 0.1, 0.05, 0.01],
+      'test',
+    );
+    const floor = 0.01 * 0.7;
+    expect(r.forecast6m).toBeGreaterThanOrEqual(floor);
+    expect(r.forecast12m).toBeGreaterThanOrEqual(floor);
+    expect(r.forecast24m).toBeGreaterThanOrEqual(floor);
+  });
+
+  it('hard-floor only kicks in when OLS would drop below it', () => {
+    const r = forecastTrend(
+      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+      'test',
+    );
+    expect(r.forecast24m).toBeGreaterThan(0);
+  });
+
   it('marks high confidence for highly correlated linear data', () => {
     const r = forecastTrend(
       [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],

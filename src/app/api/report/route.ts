@@ -89,12 +89,15 @@ export async function GET(req: Request): Promise<NextResponse> {
   try {
     const geo = await geocode(address);
 
+    const censusKey = req.headers.get('X-Census-Key') ?? '';
+    const weatherKey = req.headers.get('X-Weather-Key') ?? '';
+
     const [o, p, c, ce, w] = await Promise.all([
       timed(() => fetchOverpass(geo)),
       timed(() => fetchPermits(geo)),
       timed(() => fetchComplaints(geo)),
-      timed(() => fetchCensus(geo)),
-      timed(() => fetchAirQuality(geo)),
+      timed(() => fetchCensus(geo, censusKey)),
+      timed(() => fetchAirQuality(geo, weatherKey)),
     ]);
 
     const amenities = o.ok
@@ -207,13 +210,9 @@ export async function GET(req: Request): Promise<NextResponse> {
       sources: {
         overpass: o.ok ? 'ok' : 'failed',
         builddata: p.ok ? 'ok' : 'failed',
-        complaints: c.ok
-          ? complaints.length > 0
-            ? 'ok'
-            : 'skipped'
-          : 'failed',
-        census: ce.ok && census ? 'ok' : 'skipped',
-        weather: w.ok && airQuality ? 'ok' : 'skipped',
+        complaints: c.ok ? 'ok' : 'failed',
+        census: ce.ok ? 'ok' : 'failed',
+        weather: w.ok ? 'ok' : 'failed',
       },
     };
 
