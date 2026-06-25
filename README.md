@@ -4,7 +4,7 @@
 
 Neighborhood Now is a neighborhood intelligence platform built for FutureHacks 2026. It aggregates live data from six open sources, runs statistical analysis to detect anomalies and forecast trends, and presents the result through a conversational interface. One address returns a full report: livability score, anomaly alerts, two-year forecast, what-if scenarios, and AI chat.
 
-[![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js&logoColor=white)](https://nextjs.org) [![React 19](https://img.shields.io/badge/React-19-149eca?logo=react&logoColor=white)](https://react.dev) [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org) [![MapLibre](https://img.shields.io/badge/MapLibre_GL-5-1a73e8)](https://maplibre.org)
+[![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js&logoColor=white)](https://nextjs.org) [![React 19](https://img.shields.io/badge/React-19-149eca?logo=react&logoColor=white)](https://react.dev) [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org) [![MapLibre](https://img.shields.io/badge/MapLibre_GL-5-1a73e8)](https://maplibre.org) [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fmonke-sniper%2Fneighborhood-now)
 
 **Repository:** [github.com/monke-sniper/neighborhood-now](https://github.com/monke-sniper/neighborhood-now)
 
@@ -28,12 +28,23 @@ Neighborhood Now is a neighborhood intelligence platform built for FutureHacks 2
 
 ## Features
 
-- **Livability score** — 0–100 rating across amenity density, transit access, food access, green space, and development activity. Each component is normalized via `((actual - p10) / (p90 - p10)) × 100` against live Toronto benchmarks captured at build time. Includes a Top 10% / Above average / Average / Below average / Bottom 25% ranking label
-- **Anomaly detection** — 12+ signal sources scored with Poisson-approximation z-score against the citywide p50 baseline. Warnings at |z| > 1.8, critical at |z| > 3. Surfaces both over- and under-represented metrics
-- **Two-year forecast** — EWMA smoothing for short series (n < 6), ordinary-least-squares regression for longer series (n ≥ 6), with one-sigma confidence bands and a R²-based confidence label
-- **What-if simulator** — six scenarios (subway, park, 500-unit development, grocery, school, transit strike). Impacts are grounded in the current state, so a subway in a transit-poor area produces a larger delta than one in a transit-rich area
-- **AI chat** — natural-language questions about the neighborhood, answered from the structured report only. Uses Ollama Cloud when `OLLAMA_API_KEY` is set, otherwise returns a stub message
+- **Livability score** — 0–100 rating across nine components: amenity density, transit access, food access, green space, development, civic, culture, recreation, and services. Each component is normalized via `((actual - p10) / (p90 - p10)) × 100` against live Toronto benchmarks. Includes a Top 10% / Above average / Average / Below average / Bottom 25% ranking label
+- **Configurable search radius** — 1 km / 2 km / 3 km / 5 km selector. Default is 3 km. Benchmarks scale with area automatically
+- **Twelve amenity kinds** — restaurants, cafés, schools, grocery, parks, transit, recreation (sports centres, fitness, swimming pools, playgrounds, dog parks), civic (community centres, social facilities, town halls, places of worship, police, fire stations), culture (museums, theatres, cinemas, arts centres), services (car repair, hair salons, opticians, banks, ATMs, pharmacies), construction
+- **Anomaly detection** — 12+ signal sources scored with Poisson-approximation z-score against the citywide p50 baseline. Warnings at |z| > 1.8, critical at |z| > 3
+- **Two-year forecast** — EWMA smoothing for short series (n < 6), ordinary-least-squares regression for longer series (n ≥ 6), with one-sigma confidence bands. Hard-floored to never drop more than 30% from the current value
+- **What-if simulator** — six scenarios (subway, park, 500-unit development, grocery, school, transit strike). Impacts are grounded in the current state and surface in the scorecard as inline deltas
+- **AI chat and recommendations** — natural-language questions and intervention recommendations, answered from the structured report only. Uses Ollama Cloud when a user-provided key is set
+- **In-browser API key settings** — the deployed app ships with zero server-side keys. Users add their own Ollama/Census/OpenWeather keys via the Settings panel; keys live in browser localStorage and travel per-request as `X-*-Key` headers. Safe for one-click Vercel deploy
 - **Terminal aesthetic** — JetBrains Mono, pure black background, teal `#5eead4` accents, sharp borders, `[BRACKET]` labels, and a top status bar with live clock and source health
+
+## Deploy to Vercel
+
+The app is designed for zero-config Vercel deployment. No server-side API keys are required — every user provides their own keys via the in-app Settings panel.
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fmonke-sniper%2Fneighborhood-now)
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for the full guide, including the API key safety model, configuration, and troubleshooting.
 
 ## Quick Start
 
@@ -114,7 +125,7 @@ The map does not require a key. MapLibre GL renders the CARTO dark-matter basema
 
 ## Tests
 
-42 tests across 5 files. They run against in-memory data only (no network), so they are fast (~250 ms total) and deterministic.
+78 tests across 7 files. They run against in-memory data only (no network), so they are fast (~280 ms total) and deterministic.
 
 ```bash
 npm test
@@ -122,10 +133,12 @@ npm test
 
 | File | Tests | What it covers |
 |---|---:|---|
-| `tests/score.test.ts` | 14 | Percentile scoring, ranking, clamp behavior, the no-13/100-floor invariant |
+| `tests/score.test.ts` | 14 | Percentile scoring, ranking, clamp behavior, the no-13/100-floor invariant, 9-component shape |
 | `tests/anomalies.test.ts` | 5 | Z-score thresholds, citywide-baseline fallback, sort order |
-| `tests/forecast.test.ts` | 9 | EWMA for n<6, OLS for n≥6, confidence bands, R² thresholds |
-| `tests/whatif.test.ts` | 10 | Six scenarios, grounded impacts, clamp behavior |
+| `tests/forecast.test.ts` | 11 | EWMA for n<6, OLS for n≥6, hard floor, confidence bands, R² thresholds |
+| `tests/whatif.test.ts` | 10 | Six scenarios, grounded impacts, clamp behavior, 9-component shape |
+| `tests/recommend.test.ts` | 14 | JSON extraction (raw/fenced/prose), scenario-id validation, fallback for weakest components |
+| `tests/amenity.test.ts` | 20 | `pickName` with name/name:en/brand/operator/ref fallback, deriveKindLabel from 6 tag keys |
 | `tests/api.test.ts` | 4 | `/api/report` GET handler: 400 on missing address, 200 with body, `?debug=1` shape |
 
 The end-to-end harness lives at `scripts/verify.mjs` and is run separately:

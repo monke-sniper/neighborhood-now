@@ -38,7 +38,10 @@ function toPermit(r: BuildDataRaw, index: number): Permit | null {
   };
 }
 
-export async function fetchPermits(center: LatLon): Promise<Permit[]> {
+export async function fetchPermits(
+  center: LatLon,
+  radiusMeters: number = CONFIG.builddata.defaultRadius,
+): Promise<Permit[]> {
   let all = cache.get(CACHE_KEY);
   if (!all) {
     const url = `${CONFIG.builddata.url}?format=json&municipality=${CONFIG.builddata.municipality}`;
@@ -53,5 +56,5 @@ export async function fetchPermits(center: LatLon): Promise<Permit[]> {
       .filter((p): p is Permit => p !== null);
     cache.set(CACHE_KEY, all, CONFIG.cache.builddataTtlMs);
   }
-  return filterByRadius(all, center, CONFIG.builddata.radiusMeters);
+  return filterByRadius(all, center, radiusMeters);
 }

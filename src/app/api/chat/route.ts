@@ -7,9 +7,10 @@ import type {
   NeighborhoodReport,
 } from '@/lib/types';
 import { haversineMeters } from '@/lib/utils/geo';
+import { pickName } from '@/lib/utils/amenity';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 10;
 
 const DEFAULT_OLLAMA_BASE = process.env.OLLAMA_BASE_URL || 'https://ollama.com';
 const DEFAULT_OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'gpt-oss:20b';
@@ -21,12 +22,19 @@ const NAMED_PER_KIND: Partial<Record<AmenityKind, number>> = {
   grocery: 5,
   park: 5,
   cafe: 5,
+  civic: 5,
+  culture: 5,
+  recreation: 5,
+  service: 5,
   construction: 3,
 };
 
-function pickName(a: Amenity): string | null {
+function pickDisplayName(a: Amenity): string | null {
   const t = a.tags ?? {};
-  return t.name ?? t['name:en'] ?? t.brand ?? t.operator ?? null;
+  if (t.name ?? t['name:en'] ?? t.brand ?? t.operator) {
+    return pickName(a);
+  }
+  return null;
 }
 
 function namedByKind(
@@ -35,7 +43,7 @@ function namedByKind(
 ): Record<string, Array<{ name: string; kind: AmenityKind; distanceKm: number }>> {
   const grouped = new Map<AmenityKind, Amenity[]>();
   for (const a of amenities) {
-    const name = pickName(a);
+    const name = pickDisplayName(a);
     if (!name) continue;
     const arr = grouped.get(a.kind) ?? [];
     arr.push(a);
@@ -48,7 +56,7 @@ function namedByKind(
       (a, b) => haversineMeters(a, center) - haversineMeters(b, center),
     );
     out[kind] = items.slice(0, limit).map((a) => ({
-      name: pickName(a)!,
+      name: pickDisplayName(a)!,
       kind,
       distanceKm: Number((haversineMeters(a, center) / 1000).toFixed(2)),
     }));

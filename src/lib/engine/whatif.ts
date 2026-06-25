@@ -126,6 +126,10 @@ export function simulateWhatIf(
     foodAccess: clamp(current.foodAccess + (resolved.foodAccess ?? 0)),
     greenSpace: clamp(current.greenSpace + (resolved.greenSpace ?? 0)),
     development: clamp(current.development + (resolved.development ?? 0)),
+    civicScore: clamp(current.civicScore + (resolved.civicScore ?? 0)),
+    cultureScore: clamp(current.cultureScore + (resolved.cultureScore ?? 0)),
+    recreationScore: clamp(current.recreationScore + (resolved.recreationScore ?? 0)),
+    serviceScore: clamp(current.serviceScore + (resolved.serviceScore ?? 0)),
   };
   const after = computeTotal(modified).total;
   return {

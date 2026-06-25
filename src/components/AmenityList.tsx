@@ -1,8 +1,10 @@
 import type { Amenity, AmenityKind, LatLon, NeighborhoodReport } from '@/lib/types';
 import { haversineMeters } from '@/lib/utils/geo';
+import { hasRealName, pickName } from '@/lib/utils/amenity';
 
 interface Props {
   report: NeighborhoodReport;
+  radiusMeters: number;
 }
 
 interface Section {
@@ -17,6 +19,10 @@ const SECTIONS: Section[] = [
   { key: 'cafe', label: 'CAFÉS', defaultOpen: true },
   { key: 'grocery', label: 'GROCERY', defaultOpen: false },
   { key: 'park', label: 'PARKS', defaultOpen: false },
+  { key: 'recreation', label: 'RECREATION', defaultOpen: false },
+  { key: 'civic', label: 'CIVIC', defaultOpen: false },
+  { key: 'culture', label: 'CULTURE', defaultOpen: false },
+  { key: 'service', label: 'SERVICES', defaultOpen: false },
   { key: 'bus_stop', label: 'BUS STOPS', defaultOpen: false },
   { key: 'transit', label: 'TRANSIT STATIONS', defaultOpen: false },
   { key: 'construction', label: 'CONSTRUCTION SITES', defaultOpen: false },
@@ -33,19 +39,11 @@ function formatDistance(km: number): string {
   return `${km.toFixed(2)} km`;
 }
 
-function pickName(a: Amenity): string {
-  const t = a.tags ?? {};
-  return (
-    t.name ??
-    t['name:en'] ??
-    t.brand ??
-    t.operator ??
-    t.ref ??
-    `${a.kind}/${a.id.split('/').pop() ?? 'unknown'}`
-  );
+function radiusLabel(m: number): string {
+  return m >= 1000 ? `${m / 1000}KM` : `${m}M`;
 }
 
-export function AmenityList({ report }: Props) {
+export function AmenityList({ report, radiusMeters }: Props) {
   const center = report.coords;
   const byKind = new Map<AmenityKind, Amenity[]>();
   for (const a of report.amenities.amenities) {
@@ -58,7 +56,7 @@ export function AmenityList({ report }: Props) {
     <div className="flex flex-col gap-2 p-4 border border-[var(--color-border)] bg-[var(--color-surface)]">
       <div className="flex items-center justify-between border-b border-[var(--color-border)] pb-2">
         <h2 className="text-xs uppercase tracking-widest text-[var(--color-accent)] font-semibold">
-          [ NAMED PLACES // 1500M RADIUS ]
+          [ NAMED PLACES // {radiusLabel(radiusMeters)} RADIUS ]
         </h2>
         <div className="text-[10px] text-[var(--color-text-mute)] uppercase tracking-wider">
           SOURCE: OSM
@@ -94,19 +92,29 @@ export function AmenityList({ report }: Props) {
               </span>
             </summary>
             <ul className="border-t border-[var(--color-border)] divide-y divide-[var(--color-border)]">
-              {shown.map((a) => (
-                <li
-                  key={a.id}
-                  className="px-3 py-1 flex items-center justify-between gap-3 text-xs"
-                >
-                  <span className="text-[var(--color-text)] truncate">
-                    {pickName(a)}
-                  </span>
-                  <span className="text-[var(--color-text-mute)] tabular-nums whitespace-nowrap">
-                    {formatDistance(distanceKm(a, center))}
-                  </span>
-                </li>
-              ))}
+              {shown.map((a) => {
+                const real = hasRealName(a);
+                return (
+                  <li
+                    key={a.id}
+                    className="px-3 py-1 flex items-center justify-between gap-3 text-xs"
+                  >
+                    <span
+                      className={`truncate ${
+                        real
+                          ? 'text-[var(--color-text)]'
+                          : 'text-[var(--color-text-mute)] italic'
+                      }`}
+                      title={a.tags?.name ?? pickName(a)}
+                    >
+                      {pickName(a)}
+                    </span>
+                    <span className="text-[var(--color-text-mute)] tabular-nums whitespace-nowrap">
+                      {formatDistance(distanceKm(a, center))}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           </details>
         );

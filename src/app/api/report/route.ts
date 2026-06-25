@@ -10,10 +10,11 @@ import { detectAnomalies, type AnomalyContext } from '@/lib/engine/anomalies';
 import { forecastTrend } from '@/lib/engine/forecast';
 import { log } from '@/lib/logger';
 import { TTLCache } from '@/lib/utils/cache';
-import { CONFIG } from '@/lib/config';
+import { CONFIG, parseRadius } from '@/lib/config';
 import type { NeighborhoodReport } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 10;
 
 const reportCache = new TTLCache<string, NeighborhoodReport>();
 
@@ -73,11 +74,12 @@ export async function GET(req: Request): Promise<NextResponse> {
   const url = new URL(req.url);
   const address = url.searchParams.get('address')?.trim();
   const debug = url.searchParams.get('debug') === '1';
+  const radius = parseRadius(url.searchParams.get('radius'));
   if (!address) {
     return NextResponse.json({ error: 'Missing ?address=' }, { status: 400 });
   }
 
-  const cacheKey = normalizeAddress(address);
+  const cacheKey = `${normalizeAddress(address)}|${radius}`;
   if (!debug) {
     const hit = reportCache.get(cacheKey);
     if (hit) {
@@ -93,9 +95,9 @@ export async function GET(req: Request): Promise<NextResponse> {
     const weatherKey = req.headers.get('X-Weather-Key') ?? '';
 
     const [o, p, c, ce, w] = await Promise.all([
-      timed(() => fetchOverpass(geo)),
-      timed(() => fetchPermits(geo)),
-      timed(() => fetchComplaints(geo)),
+      timed(() => fetchOverpass(geo, radius)),
+      timed(() => fetchPermits(geo, radius)),
+      timed(() => fetchComplaints(geo, radius)),
       timed(() => fetchCensus(geo, censusKey)),
       timed(() => fetchAirQuality(geo, weatherKey)),
     ]);
@@ -125,7 +127,7 @@ export async function GET(req: Request): Promise<NextResponse> {
       },
     });
 
-    const breakdown = computeBreakdown(amenities.amenities, permits);
+    const breakdown = computeBreakdown(amenities.amenities, permits, radius);
     const score = computeTotal(breakdown);
 
     const months = lastNMonths(12);
@@ -235,7 +237,7 @@ export async function GET(req: Request): Promise<NextResponse> {
         rawElements: amenities.rawCount,
       };
       const areaKm2 =
-        (CONFIG.overpass.radiusMeters / 1000) ** 2 * Math.PI;
+        (radius / 1000) ** 2 * Math.PI;
       const debugInfo = {
         geocode: {
           displayName: geo.displayName,

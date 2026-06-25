@@ -1,5 +1,5 @@
 import { CONFIG } from '../config';
-import { BENCHMARKS } from './benchmarks';
+import { BENCHMARKS, scaleBench, type BenchKey } from './benchmarks';
 import type {
   Amenity,
   LivabilityScore,
@@ -41,16 +41,15 @@ function safeRound(n: number): number {
   return Math.round(clamp01(n));
 }
 
-function pickBench(
-  key: 'restaurant' | 'cafe' | 'school' | 'grocery' | 'park' | 'transit' | 'construction' | 'permits500m' | 'complaints',
-) {
+function pickBench(key: BenchKey, radiusMeters: number) {
   const m = BENCHMARKS.metrics[key];
-  return { p10: m.p10, p50: m.p50, p90: m.p90 };
+  return scaleBench(m, radiusMeters);
 }
 
 export function computeBreakdown(
   amenities: Amenity[],
   permits: Permit[],
+  radiusMeters: number = 1500,
 ): ScoreBreakdown {
   const restaurants = countKinds(amenities, ['restaurant']);
   const cafes = countKinds(amenities, ['cafe']);
@@ -59,6 +58,10 @@ export function computeBreakdown(
   const parks = countKinds(amenities, ['park']);
   const transit = countKinds(amenities, ['bus_stop', 'transit']);
   const construction = countKinds(amenities, ['construction']);
+  const civic = countKinds(amenities, ['civic']);
+  const culture = countKinds(amenities, ['culture']);
+  const recreation = countKinds(amenities, ['recreation']);
+  const service = countKinds(amenities, ['service']);
 
   const now = Date.now();
   const recentPermits = permits.filter((p) => {
@@ -67,14 +70,18 @@ export function computeBreakdown(
   }).length;
 
   const b = {
-    restaurant: pickBench('restaurant'),
-    cafe: pickBench('cafe'),
-    school: pickBench('school'),
-    grocery: pickBench('grocery'),
-    park: pickBench('park'),
-    transit: pickBench('transit'),
-    construction: pickBench('construction'),
-    permits: pickBench('permits500m'),
+    restaurant: pickBench('restaurant', radiusMeters),
+    cafe: pickBench('cafe', radiusMeters),
+    school: pickBench('school', radiusMeters),
+    grocery: pickBench('grocery', radiusMeters),
+    park: pickBench('park', radiusMeters),
+    transit: pickBench('transit', radiusMeters),
+    construction: pickBench('construction', radiusMeters),
+    permits: pickBench('permits500m', radiusMeters),
+    civic: pickBench('civic', radiusMeters),
+    culture: pickBench('culture', radiusMeters),
+    recreation: pickBench('recreation', radiusMeters),
+    service: pickBench('service', radiusMeters),
   };
 
   const amenityMix = restaurants + cafes + schools;
@@ -122,12 +129,29 @@ export function computeBreakdown(
     }
   }
 
+  const civicScore = safeRound(
+    percentileScore(civic, b.civic.p10, b.civic.p90, false),
+  );
+  const cultureScore = safeRound(
+    percentileScore(culture, b.culture.p10, b.culture.p90, false),
+  );
+  const recreationScore = safeRound(
+    percentileScore(recreation, b.recreation.p10, b.recreation.p90, false),
+  );
+  const serviceScore = safeRound(
+    percentileScore(service, b.service.p10, b.service.p90, false),
+  );
+
   return {
     amenityDensity,
     transitScore,
     foodAccess,
     greenSpace,
     development,
+    civicScore,
+    cultureScore,
+    recreationScore,
+    serviceScore,
   };
 }
 
@@ -138,7 +162,11 @@ export function computeTotal(breakdown: ScoreBreakdown): LivabilityScore {
     breakdown.transitScore * w.transitScore +
     breakdown.foodAccess * w.foodAccess +
     breakdown.greenSpace * w.greenSpace +
-    breakdown.development * w.development;
+    breakdown.development * w.development +
+    breakdown.civicScore * w.civicScore +
+    breakdown.cultureScore * w.cultureScore +
+    breakdown.recreationScore * w.recreationScore +
+    breakdown.serviceScore * w.serviceScore;
   const totalClamped = Math.round(clamp01(total));
   return {
     total: totalClamped,

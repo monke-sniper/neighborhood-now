@@ -1,6 +1,7 @@
 import type { Amenity, LatLon, NeighborhoodReport } from '@/lib/types';
 import { computeBreakdown, computeTotal } from '@/lib/engine/score';
 import { haversineMeters } from '@/lib/utils/geo';
+import { hasRealName, pickName } from '@/lib/utils/amenity';
 
 interface Props {
   report: NeighborhoodReport;
@@ -12,16 +13,6 @@ interface SchoolImpact {
   distanceKm: number;
   delta: number;
   hasName: boolean;
-}
-
-function pickName(a: Amenity): string {
-  const t = a.tags ?? {};
-  return (
-    t.name ??
-    t['name:en'] ??
-    t.operator ??
-    `${a.kind}/${a.id.split('/').pop() ?? 'unknown'}`
-  );
 }
 
 function distanceKm(a: Amenity, c: LatLon): number {
@@ -70,7 +61,7 @@ export function SchoolsPanel({ report }: Props) {
       name,
       distanceKm: distanceKm(s, center),
       delta: currentTotal - altTotal,
-      hasName: Boolean(s.tags?.name ?? s.tags?.['name:en']),
+      hasName: hasRealName(s),
     };
   });
 

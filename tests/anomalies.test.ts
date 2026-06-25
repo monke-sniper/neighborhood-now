@@ -8,6 +8,10 @@ const NEUTRAL: ScoreBreakdown = {
   foodAccess: 50,
   greenSpace: 50,
   development: 50,
+  civicScore: 50,
+  cultureScore: 50,
+  recreationScore: 50,
+  serviceScore: 50,
 };
 
 describe('detectAnomalies', () => {
@@ -51,6 +55,10 @@ describe('detectAnomalies', () => {
         foodAccess: 90,
         greenSpace: 30,
         development: 30,
+        civicScore: 50,
+        cultureScore: 50,
+        recreationScore: 50,
+        serviceScore: 50,
       },
       airQuality: null,
       census: null,
@@ -80,6 +88,10 @@ describe('detectAnomalies', () => {
         foodAccess: 5,
         greenSpace: 5,
         development: 5,
+        civicScore: 50,
+        cultureScore: 50,
+        recreationScore: 50,
+        serviceScore: 50,
       },
       airQuality: null,
       census: null,

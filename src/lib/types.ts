@@ -13,7 +13,11 @@ export type AmenityKind =
   | 'park'
   | 'bus_stop'
   | 'transit'
-  | 'construction';
+  | 'construction'
+  | 'civic'
+  | 'culture'
+  | 'recreation'
+  | 'service';
 
 export interface Amenity {
   id: string;
@@ -59,6 +63,10 @@ export interface ScoreBreakdown {
   foodAccess: number;
   greenSpace: number;
   development: number;
+  civicScore: number;
+  cultureScore: number;
+  recreationScore: number;
+  serviceScore: number;
 }
 
 export interface LivabilityScore {
@@ -117,6 +125,10 @@ export interface Scenario {
     foodAccess?: number | ((current: ScoreBreakdown) => number);
     greenSpace?: number | ((current: ScoreBreakdown) => number);
     development?: number | ((current: ScoreBreakdown) => number);
+    civicScore?: number | ((current: ScoreBreakdown) => number);
+    cultureScore?: number | ((current: ScoreBreakdown) => number);
+    recreationScore?: number | ((current: ScoreBreakdown) => number);
+    serviceScore?: number | ((current: ScoreBreakdown) => number);
   };
 }
 

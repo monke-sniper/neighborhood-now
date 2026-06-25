@@ -8,6 +8,10 @@ const NEUTRAL: ScoreBreakdown = {
   foodAccess: 50,
   greenSpace: 50,
   development: 50,
+  civicScore: 50,
+  cultureScore: 50,
+  recreationScore: 50,
+  serviceScore: 50,
 };
 
 const LOW: ScoreBreakdown = {
@@ -16,6 +20,10 @@ const LOW: ScoreBreakdown = {
   foodAccess: 10,
   greenSpace: 10,
   development: 10,
+  civicScore: 10,
+  cultureScore: 10,
+  recreationScore: 10,
+  serviceScore: 10,
 };
 
 describe('SCENARIOS', () => {
@@ -82,11 +90,15 @@ describe('simulateWhatIf', () => {
     const subway = SCENARIOS.find((s) => s.id === 'subway')!;
     const r = simulateWhatIf(NEUTRAL, subway);
     const total =
-      NEUTRAL.amenityDensity * 0.25 +
-      NEUTRAL.transitScore * 0.25 +
-      NEUTRAL.foodAccess * 0.2 +
-      NEUTRAL.greenSpace * 0.15 +
-      NEUTRAL.development * 0.15;
+      NEUTRAL.amenityDensity * 0.18 +
+      NEUTRAL.transitScore * 0.18 +
+      NEUTRAL.foodAccess * 0.14 +
+      NEUTRAL.greenSpace * 0.10 +
+      NEUTRAL.development * 0.10 +
+      NEUTRAL.civicScore * 0.075 +
+      NEUTRAL.cultureScore * 0.075 +
+      NEUTRAL.recreationScore * 0.075 +
+      NEUTRAL.serviceScore * 0.075;
     expect(Math.abs(r.before - Math.round(total))).toBeLessThanOrEqual(1);
   });
 });

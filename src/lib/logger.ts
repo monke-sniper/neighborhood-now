@@ -1,3 +1,13 @@
+/**
+ * Structured logger.
+ *
+ * SECURITY POLICY: Never pass `req.headers` or any object that may contain
+ * `X-Ollama-Key`, `X-Census-Key`, `X-Weather-Key`, `X-Ollama-Base`,
+ * `X-Ollama-Model` or any user-supplied API key to this logger. The logger
+ * emits to stdout/stderr, which on Vercel is captured to the function log
+ * and is retained for the deployment lifetime.
+ */
+
 type Level = 'debug' | 'info' | 'warn' | 'error';
 
 interface LogFields {

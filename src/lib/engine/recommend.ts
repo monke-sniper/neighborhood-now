@@ -53,6 +53,10 @@ const SCENARIO_FOR_COMPONENT: Record<keyof ScoreBreakdown, string> = {
   foodAccess: 'grocery',
   amenityDensity: 'development',
   development: 'development',
+  civicScore: 'development',
+  cultureScore: 'development',
+  recreationScore: 'park',
+  serviceScore: 'development',
 };
 
 const COMPONENT_LABEL: Record<keyof ScoreBreakdown, string> = {
@@ -61,6 +65,10 @@ const COMPONENT_LABEL: Record<keyof ScoreBreakdown, string> = {
   foodAccess: 'food access',
   greenSpace: 'green space',
   development: 'development activity',
+  civicScore: 'civic services',
+  cultureScore: 'cultural venues',
+  recreationScore: 'recreation',
+  serviceScore: 'service amenities',
 };
 
 export function fallbackRecs(report: NeighborhoodReport): Recommendation[] {

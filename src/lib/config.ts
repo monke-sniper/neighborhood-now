@@ -1,3 +1,12 @@
+export const ALLOWED_RADII_M = [1000, 2000, 3000, 5000] as const;
+export type AllowedRadius = (typeof ALLOWED_RADII_M)[number];
+
+export function parseRadius(raw: string | null | undefined): AllowedRadius {
+  const n = Number(raw);
+  if (ALLOWED_RADII_M.includes(n as AllowedRadius)) return n as AllowedRadius;
+  return 3000;
+}
+
 export const CONFIG = {
   overpass: {
     url: 'https://overpass-api.de/api/interpreter',
@@ -6,14 +15,14 @@ export const CONFIG = {
       'https://overpass.kumi.systems/api/interpreter',
       'https://overpass.private.coffee/api/interpreter',
     ],
-    radiusMeters: 1500,
+    defaultRadius: 3000,
     timeoutSec: 25,
     userAgent: 'NeighborhoodNow/1.0 (hackathon; contact: hello@neighborhood.now)',
   },
   builddata: {
     url: 'https://api.builddata.ca/permit/export',
     municipality: 'toronto',
-    radiusMeters: 1500,
+    defaultRadius: 3000,
   },
   nominatim: {
     url: 'https://nominatim.openstreetmap.org/search',
@@ -22,7 +31,8 @@ export const CONFIG = {
   },
   complaints: {
     file: 'data/toronto-311.json',
-    radiusMeters: 1500,
+    url: '/data/toronto-311.json',
+    defaultRadius: 3000,
   },
   census: {
     base: 'https://api.census.gov/data/2023/acs/acs5',
@@ -36,10 +46,14 @@ export const CONFIG = {
     builddataTtlMs: 1000 * 60 * 60,
   },
   weights: {
-    amenityDensity: 0.25,
-    transitScore: 0.25,
-    foodAccess: 0.2,
-    greenSpace: 0.15,
-    development: 0.15,
+    amenityDensity: 0.18,
+    transitScore: 0.18,
+    foodAccess: 0.14,
+    greenSpace: 0.10,
+    development: 0.10,
+    civicScore: 0.075,
+    cultureScore: 0.075,
+    recreationScore: 0.075,
+    serviceScore: 0.075,
   },
 } as const;

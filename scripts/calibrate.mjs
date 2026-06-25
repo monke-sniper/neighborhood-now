@@ -239,7 +239,7 @@ async function main() {
   console.log(`  ${allPermits.length} permits total`);
 
   console.log('Loading toronto-311.json...');
-  const raw = readFileSync(path.join(root, 'data', 'toronto-311.json'), 'utf-8');
+  const raw = readFileSync(path.join(root, 'public', 'data', 'toronto-311.json'), 'utf-8');
   const complaints = JSON.parse(raw);
   console.log(`  ${complaints.length} complaint records`);
 

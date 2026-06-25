@@ -1,23 +1,31 @@
-import { promises as fs } from 'fs';
-import path from 'path';
+import { TTLCache } from '../utils/cache';
 import { filterByRadius } from '../utils/geo';
+import { CONFIG } from '../config';
 import type { Complaint, LatLon } from '../types';
 
-let cache: Complaint[] | null = null;
+const cache = new TTLCache<string, Complaint[]>();
+const CACHE_KEY = 'toronto-311';
 
 async function loadAll(): Promise<Complaint[]> {
-  if (cache) return cache;
-  const file = path.join(process.cwd(), 'data', 'toronto-311.json');
-  const raw = await fs.readFile(file, 'utf-8');
-  const parsed = JSON.parse(raw) as Complaint[];
-  cache = Array.isArray(parsed) ? parsed : [];
-  return cache;
+  const hit = cache.get(CACHE_KEY);
+  if (hit) return hit;
+  const res = await fetch(CONFIG.complaints.url, { cache: 'no-store' });
+  if (!res.ok) {
+    throw new Error(`311 file HTTP ${res.status}`);
+  }
+  const data = (await res.json()) as Complaint[];
+  const list = Array.isArray(data) ? data : [];
+  cache.set(CACHE_KEY, list, 1000 * 60 * 60);
+  return list;
 }
 
-export async function fetchComplaints(center: LatLon): Promise<Complaint[]> {
+export async function fetchComplaints(
+  center: LatLon,
+  radiusMeters: number = CONFIG.complaints.defaultRadius,
+): Promise<Complaint[]> {
   try {
     const all = await loadAll();
-    return filterByRadius(all, center, 1500);
+    return filterByRadius(all, center, radiusMeters);
   } catch {
     return [];
   }

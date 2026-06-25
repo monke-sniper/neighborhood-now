@@ -7,6 +7,7 @@ import { AnomalyList } from '@/components/AnomalyList';
 import { ChatBox } from '@/components/ChatBox';
 import { ForecastChart } from '@/components/ForecastChart';
 import { MapView } from '@/components/MapView';
+import { RadiusSelect } from '@/components/RadiusSelect';
 import { RecommendationsPanel } from '@/components/RecommendationsPanel';
 import { ReportCard } from '@/components/ReportCard';
 import { SchoolsPanel } from '@/components/SchoolsPanel';
@@ -14,6 +15,7 @@ import { SettingsPanel } from '@/components/SettingsPanel';
 import { WhatIfSimulator } from '@/components/WhatIfSimulator';
 import { simulateWhatIf, SCENARIOS } from '@/lib/engine/whatif';
 import { computeTotal } from '@/lib/engine/score';
+import { CONFIG } from '@/lib/config';
 import type { NeighborhoodReport, ScoreBreakdown } from '@/lib/types';
 
 type Status = 'IDLE' | 'FETCHING' | 'LIVE' | 'ERROR';
@@ -46,6 +48,7 @@ export default function Home() {
   const [now, setNow] = useState<Date>(() => new Date());
   const [status, setStatus] = useState<Status>('IDLE');
   const [activeScenarios, setActiveScenarios] = useState<Set<string>>(new Set());
+  const [radius, setRadius] = useState<number>(CONFIG.overpass.defaultRadius);
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
@@ -116,11 +119,13 @@ export default function Home() {
           &gt; TYPE AN ADDRESS. SEE WHAT IS HAPPENING. KNOW WHERE IT IS GOING.
         </p>
         <AddressInput
+          radius={radius}
           onReport={(r) => {
             setReport(r);
             setStatus('LIVE');
           }}
         />
+        <RadiusSelect value={radius} onChange={setRadius} />
         <SettingsPanel />
       </header>
 
@@ -136,7 +141,7 @@ export default function Home() {
               report={report}
               modified={whatIf && activeScenarios.size > 0 ? whatIf : null}
             />
-            <AmenityList report={report} />
+            <AmenityList report={report} radiusMeters={radius} />
             <div className="text-[10px] text-[var(--color-text-mute)] px-1 uppercase tracking-wider truncate">
               [ LOC ] {report.address}
             </div>

@@ -18,6 +18,10 @@ const LABELS: Record<keyof ScoreBreakdown, string> = {
   foodAccess: 'FOOD ACCESS',
   greenSpace: 'GREEN SPACE',
   development: 'DEVELOPMENT',
+  civicScore: 'CIVIC',
+  cultureScore: 'CULTURE',
+  recreationScore: 'RECREATION',
+  serviceScore: 'SERVICES',
 };
 
 function colorFor(score: number): string {

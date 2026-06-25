@@ -14,27 +14,27 @@ interface OverpassPayload {
   elements?: OverpassElement[];
 }
 
-const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
-const PER_CATEGORY_CAP = 2000;
+const MAX_RESPONSE_BYTES = 50 * 1024 * 1024;
+const PER_CATEGORY_CAP = 5000;
 
-function buildQuery(center: LatLon): string {
-  const r = CONFIG.overpass.radiusMeters;
+export function buildOverpassQuery(center: LatLon, radiusMeters: number): string {
+  const r = radiusMeters;
   const { lat, lon } = center;
   return (
     `[out:json][timeout:${CONFIG.overpass.timeoutSec}];` +
     `(` +
-    `node["amenity"~"^(restaurant|cafe|fast_food|food_court|bar|pub|ice_cream|biergarten|pharmacy|bank|atm|post_office|school|kindergarten|college|university|library|hospital|clinic|doctors|dentist|police|fire_station|fuel)$"]` +
+    `node["amenity"~"^(restaurant|cafe|fast_food|food_court|bar|pub|ice_cream|biergarten|pharmacy|bank|atm|post_office|school|kindergarten|college|university|library|hospital|clinic|doctors|dentist|police|fire_station|fuel|community_centre|social_facility|events_venue|townhall|courthouse|place_of_worship|recycling|arts_centre|museum|theatre|cinema|car_repair|car_wash|hairdresser|beauty|optician|florist|jewelry|laundry|dry_cleaning)$"]` +
     `(around:${r},${lat},${lon});` +
-    `node["shop"~"^(supermarket|convenience|mall|pharmacy|bakery|butcher|greengrocer|hairdresser|beauty|optician|books)$"]` +
+    `node["shop"~"^(supermarket|convenience|mall|pharmacy|bakery|butcher|greengrocer|hairdresser|beauty|optician|books|florist|jewelry|laundry)$"]` +
     `(around:${r},${lat},${lon});` +
-    `node["leisure"~"^(park|garden|nature_reserve|playground|sports_centre|fitness_centre|swimming_pool|pitch)$"]` +
+    `node["leisure"~"^(park|garden|nature_reserve|playground|sports_centre|fitness_centre|swimming_pool|pitch|golf_course|dog_park)$"]` +
     `(around:${r},${lat},${lon});` +
     `node["highway"="bus_stop"](around:${r},${lat},${lon});` +
     `node["public_transport"~"^(station|stop_position|platform)$"]` +
     `(around:${r},${lat},${lon});` +
     `node["railway"~"^(station|subway_entrance|tram_stop|light_rail|halt)$"]` +
     `(around:${r},${lat},${lon});` +
-    `way["leisure"~"^(park|garden|nature_reserve)$"]` +
+    `way["leisure"~"^(park|garden|nature_reserve|playground|sports_centre|fitness_centre|swimming_pool|pitch|golf_course|dog_park)$"]` +
     `(around:${r},${lat},${lon});` +
     `way["landuse"~"^(park|forest|recreation_ground|meadow|grass|cemetery)$"]` +
     `(around:${r},${lat},${lon});` +
@@ -86,10 +86,20 @@ function classifyAmenity(tags: Record<string, string>): AmenityKind | null {
     return 'grocery';
   }
   if (
+    l === 'sports_centre' ||
+    l === 'fitness_centre' ||
+    l === 'swimming_pool' ||
+    l === 'pitch' ||
+    l === 'golf_course' ||
+    l === 'dog_park' ||
+    l === 'playground'
+  ) {
+    return 'recreation';
+  }
+  if (
     l === 'park' ||
     l === 'garden' ||
     l === 'nature_reserve' ||
-    l === 'playground' ||
     lu === 'park' ||
     lu === 'forest' ||
     lu === 'recreation_ground' ||
@@ -112,6 +122,54 @@ function classifyAmenity(tags: Record<string, string>): AmenityKind | null {
   }
   if (lu === 'construction' || tags.building === 'construction') {
     return 'construction';
+  }
+  if (
+    a === 'community_centre' ||
+    a === 'social_facility' ||
+    a === 'townhall' ||
+    a === 'courthouse' ||
+    a === 'place_of_worship' ||
+    a === 'recycling' ||
+    a === 'hospital' ||
+    a === 'clinic' ||
+    a === 'doctors' ||
+    a === 'dentist' ||
+    a === 'police' ||
+    a === 'fire_station' ||
+    a === 'post_office'
+  ) {
+    return 'civic';
+  }
+  if (
+    a === 'arts_centre' ||
+    a === 'museum' ||
+    a === 'theatre' ||
+    a === 'cinema' ||
+    a === 'events_venue'
+  ) {
+    return 'culture';
+  }
+  if (
+    a === 'car_repair' ||
+    a === 'car_wash' ||
+    a === 'hairdresser' ||
+    a === 'beauty' ||
+    a === 'optician' ||
+    a === 'florist' ||
+    a === 'jewelry' ||
+    a === 'laundry' ||
+    a === 'dry_cleaning' ||
+    a === 'pharmacy' ||
+    a === 'bank' ||
+    a === 'atm' ||
+    s === 'hairdresser' ||
+    s === 'beauty' ||
+    s === 'optician' ||
+    s === 'florist' ||
+    s === 'jewelry' ||
+    s === 'laundry'
+  ) {
+    return 'service';
   }
   return null;
 }
@@ -218,8 +276,11 @@ function classify(elements: OverpassElement[]): OverpassResponse {
   };
 }
 
-export async function fetchOverpass(center: LatLon): Promise<OverpassResponse> {
-  const query = buildQuery(center);
+export async function fetchOverpass(
+  center: LatLon,
+  radiusMeters: number = CONFIG.overpass.defaultRadius,
+): Promise<OverpassResponse> {
+  const query = buildOverpassQuery(center, radiusMeters);
   const mirrors =
     CONFIG.overpass.mirrors.length > 0
       ? CONFIG.overpass.mirrors

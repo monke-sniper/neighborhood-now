@@ -6,9 +6,10 @@ import { clientHeaders } from '@/lib/api/client';
 
 interface Props {
   onReport: (r: NeighborhoodReport) => void;
+  radius: number;
 }
 
-export function AddressInput({ onReport }: Props) {
+export function AddressInput({ onReport, radius }: Props) {
   const [value, setValue] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,7 +22,7 @@ export function AddressInput({ onReport }: Props) {
     setError(null);
     try {
       const res = await fetch(
-        `/api/report?address=${encodeURIComponent(addr)}`,
+        `/api/report?address=${encodeURIComponent(addr)}&radius=${radius}`,
         { headers: clientHeaders() },
       );
       if (!res.ok) {

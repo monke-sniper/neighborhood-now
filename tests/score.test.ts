@@ -32,6 +32,10 @@ const NEUTRAL: ScoreBreakdown = {
   foodAccess: 50,
   greenSpace: 50,
   development: 50,
+  civicScore: 50,
+  cultureScore: 50,
+  recreationScore: 50,
+  serviceScore: 50,
 };
 
 describe('computeBreakdown', () => {
@@ -97,6 +101,10 @@ describe('computeTotal', () => {
       foodAccess: 100,
       greenSpace: 100,
       development: 100,
+      civicScore: 100,
+      cultureScore: 100,
+      recreationScore: 100,
+      serviceScore: 100,
     };
     expect(computeTotal(max).total).toBe(100);
   });
@@ -108,6 +116,10 @@ describe('computeTotal', () => {
       foodAccess: 0,
       greenSpace: 0,
       development: 0,
+      civicScore: 0,
+      cultureScore: 0,
+      recreationScore: 0,
+      serviceScore: 0,
     };
     expect(computeTotal(min).total).toBe(0);
   });
@@ -124,6 +136,10 @@ describe('computeTotal', () => {
       foodAccess: 1000,
       greenSpace: 1000,
       development: 1000,
+      civicScore: 1000,
+      cultureScore: 1000,
+      recreationScore: 1000,
+      serviceScore: 1000,
     }).total;
     expect(t1).toBeLessThanOrEqual(100);
     const t2 = computeTotal({
@@ -132,6 +148,10 @@ describe('computeTotal', () => {
       foodAccess: -100,
       greenSpace: -100,
       development: -100,
+      civicScore: -100,
+      cultureScore: -100,
+      recreationScore: -100,
+      serviceScore: -100,
     }).total;
     expect(t2).toBeGreaterThanOrEqual(0);
   });

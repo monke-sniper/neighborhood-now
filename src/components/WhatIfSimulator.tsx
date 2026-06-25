@@ -16,6 +16,10 @@ const COMPONENT_LABELS: Record<keyof ScoreBreakdown, string> = {
   foodAccess: 'FOOD',
   greenSpace: 'GREEN',
   development: 'DEV',
+  civicScore: 'CIVIC',
+  cultureScore: 'CULTURE',
+  recreationScore: 'RECREATION',
+  serviceScore: 'SERVICE',
 };
 
 function deltaColor(delta: number): string {

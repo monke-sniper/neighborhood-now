@@ -6,6 +6,11 @@
 //   - Scarborough Town Centre (43.774, -79.257)
 //   - Sherway Gardens (Etobicoke) (43.6205, -79.5135)
 // Do not edit by hand. Re-run `node scripts/calibrate.mjs` to refresh.
+//
+// Benchmarks are captured at 1500m radius. For other radii, score.ts scales
+// by area ratio (radius/1500)^2 since amenity count grows roughly with area.
+export const BENCHMARK_RADIUS_M = 1500;
+
 export interface MetricBench {
   p10: number;
   p50: number;
@@ -15,23 +20,35 @@ export interface MetricBench {
   n: number;
 }
 
+export type BenchKey =
+  | 'restaurant'
+  | 'cafe'
+  | 'school'
+  | 'grocery'
+  | 'park'
+  | 'transit'
+  | 'construction'
+  | 'permits500m'
+  | 'complaints'
+  | 'civic'
+  | 'culture'
+  | 'recreation'
+  | 'service';
+
 export interface Benchmarks {
   capturedAt: string;
   sampleSize: number;
   points: Array<{ name: string; lat: number; lon: number }>;
   samples: Array<Record<string, number>>;
-  metrics: Record<
-    | 'restaurant'
-    | 'cafe'
-    | 'school'
-    | 'grocery'
-    | 'park'
-    | 'transit'
-    | 'construction'
-    | 'permits500m'
-    | 'complaints',
-    MetricBench
-  >;
+  metrics: Record<BenchKey, MetricBench>;
+}
+
+export function scaleBench(
+  b: MetricBench,
+  radiusMeters: number,
+): { p10: number; p50: number; p90: number } {
+  const r = (radiusMeters / BENCHMARK_RADIUS_M) ** 2;
+  return { p10: b.p10 * r, p50: b.p50 * r, p90: b.p90 * r };
 }
 
 export const BENCHMARKS: Benchmarks = {
@@ -192,6 +209,38 @@ export const BENCHMARKS: Benchmarks = {
       "p90": 28,
       "min": 0,
       "max": 40,
+      "n": 5
+    },
+    "civic": {
+      "p10": 1,
+      "p50": 3,
+      "p90": 12,
+      "min": 0,
+      "max": 15,
+      "n": 5
+    },
+    "culture": {
+      "p10": 0,
+      "p50": 2,
+      "p90": 8,
+      "min": 0,
+      "max": 12,
+      "n": 5
+    },
+    "recreation": {
+      "p10": 0,
+      "p50": 3,
+      "p90": 18,
+      "min": 0,
+      "max": 25,
+      "n": 5
+    },
+    "service": {
+      "p10": 5,
+      "p50": 18,
+      "p90": 90,
+      "min": 0,
+      "max": 120,
       "n": 5
     }
   },
