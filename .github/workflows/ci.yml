@@ -24,12 +24,12 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
+          node-version: '22.x'
           cache: 'npm'
           cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        run: npm ci --no-audit --no-fund
+        run: npm ci --no-audit --no-fund --legacy-peer-deps
 
       - name: Type check
         run: npx tsc --noEmit
@@ -58,11 +58,17 @@ jobs:
 
       - name: Smoke test (production server)
         run: |
-          (npm start &) && sleep 8 && \
-          curl -fsS -o /dev/null -w "GET / -> %{http_code}\n" http://localhost:3000/ && \
-          curl -fsS -o /dev/null -w "GET /api/health -> %{http_code}\n" http://localhost:3000/api/health && \
-          curl -fsS -o /dev/null -w "GET /api/report?address=CN%20Tower&synth=1 -> %{http_code}\n" "http://localhost:3000/api/report?address=CN%20Tower&synth=1" || \
-          (echo "Smoke test failed" && exit 1)
+          set -e
+          (npm start >/tmp/next-start.log 2>&1 &)
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            if curl -fsS -o /dev/null http://localhost:3000/api/health; then break; fi
+            sleep 1
+          done
+          curl -fsS -o /dev/null -w "GET / -> %{http_code}\n" http://localhost:3000/
+          curl -fsS -o /dev/null -w "GET /api/health -> %{http_code}\n" http://localhost:3000/api/health
+          curl -fsS -o /dev/null -w "GET /api/report?synth=1 -> %{http_code}\n" "http://localhost:3000/api/report?address=CN%20Tower&synth=1"
 
       - name: Upload coverage
         if: always()
