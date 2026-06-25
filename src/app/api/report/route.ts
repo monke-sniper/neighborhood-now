@@ -17,6 +17,8 @@ import type { NeighborhoodReport } from '@/lib/types';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 10;
 
+const ROUTE_DEADLINE_MS = 9500;
+
 const reportCache = new TTLCache<string, NeighborhoodReport>();
 
 function normalizeAddress(a: string): string {
@@ -90,17 +92,45 @@ export async function GET(req: Request): Promise<NextResponse> {
   }
 
   try {
+    const routeStart = Date.now();
     const geo = await geocode(address);
+    const elapsedAfterGeocode = Date.now() - routeStart;
+    const remainingBudget = Math.max(2000, ROUTE_DEADLINE_MS - elapsedAfterGeocode);
 
     const censusKey = req.headers.get('X-Census-Key') ?? '';
     const weatherKey = req.headers.get('X-Weather-Key') ?? '';
 
-    const [o, p, c, ce, w] = await Promise.all([
+    type FetchesTuple = [
+      TimedResult<Awaited<ReturnType<typeof fetchOverpassWithFallback>>>,
+      TimedResult<Awaited<ReturnType<typeof fetchPermits>>>,
+      TimedResult<Awaited<ReturnType<typeof fetchComplaints>>>,
+      TimedResult<Awaited<ReturnType<typeof fetchCensus>>>,
+      TimedResult<Awaited<ReturnType<typeof fetchAirQuality>>>,
+    ];
+
+    const makeFailureTuple = (): FetchesTuple => [
+      { ok: false, error: `route deadline ${remainingBudget}ms`, ms: remainingBudget },
+      { ok: false, error: `route deadline ${remainingBudget}ms`, ms: remainingBudget },
+      { ok: false, error: `route deadline ${remainingBudget}ms`, ms: remainingBudget },
+      { ok: false, error: `route deadline ${remainingBudget}ms`, ms: remainingBudget },
+      { ok: false, error: `route deadline ${remainingBudget}ms`, ms: remainingBudget },
+    ];
+
+    const fetchesPromise: Promise<FetchesTuple> = Promise.all([
       timed(() => fetchOverpassWithFallback(geo, radius)),
       timed(() => fetchPermits(geo, radius)),
       timed(() => fetchComplaints(geo, radius)),
       timed(() => fetchCensus(geo, censusKey)),
       timed(() => fetchAirQuality(geo, weatherKey)),
+    ]) as unknown as Promise<FetchesTuple>;
+
+    const timeoutPromise: Promise<FetchesTuple> = new Promise((resolve) => {
+      setTimeout(() => resolve(makeFailureTuple()), remainingBudget);
+    });
+
+    const [o, p, c, ce, w] = await Promise.race([
+      fetchesPromise,
+      timeoutPromise,
     ]);
 
     const oValue = o.ok

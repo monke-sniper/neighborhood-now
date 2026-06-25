@@ -17,8 +17,8 @@ interface OverpassPayload {
 const MAX_RESPONSE_BYTES = 50 * 1024 * 1024;
 const PER_CATEGORY_CAP = 2000;
 export const PER_CATEGORY_CAP_PUBLIC = PER_CATEGORY_CAP;
-const PRIMARY_TIMEOUT_MS = 7000;
-const FALLBACK_TIMEOUT_MS = 4000;
+const PRIMARY_TIMEOUT_MS = 5000;
+const FALLBACK_TIMEOUT_MS = 2500;
 const FALLBACK_RADIUS = 1000;
 
 export function buildOverpassQuery(center: LatLon, radiusMeters: number): string {
