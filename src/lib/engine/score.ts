@@ -1,10 +1,20 @@
 import { CONFIG } from '../config';
 import { BENCHMARKS, scaleBench, type BenchKey } from './benchmarks';
+import { computeTotalFromBreakdown } from './score.total';
+import {
+  ALL_PRESENT,
+  type DataPresence,
+  type WeightSet,
+} from './score.types';
+import { haversineMeters } from '../utils/geo';
+import { hasRealName, pickName } from '../utils/amenity';
 import type {
   Amenity,
+  LatLon,
   LivabilityScore,
   Permit,
   Ranking,
+  SchoolImpact,
   ScoreBreakdown,
 } from '../types';
 
@@ -47,17 +57,8 @@ function pickBench(key: BenchKey, radiusMeters: number) {
   return scaleBench(m, radiusMeters);
 }
 
-export interface DataPresence {
-  amenityDensity: boolean;
-  transitScore: boolean;
-  foodAccess: boolean;
-  greenSpace: boolean;
-  development: boolean;
-  civicScore: boolean;
-  cultureScore: boolean;
-  recreationScore: boolean;
-  serviceScore: boolean;
-}
+export type { DataPresence, WeightSet } from './score.types';
+export { ALL_PRESENT, ALL_ABSENT } from './score.types';
 
 export interface ComputeBreakdownResult {
   breakdown: ScoreBreakdown;
@@ -82,6 +83,7 @@ export function computeBreakdown(
   amenities: Amenity[],
   permits: Permit[],
   radiusMeters: number = 1500,
+  opts: { nowMs?: number } = {},
 ): ComputeBreakdownResult {
   const restaurants = countKinds(amenities, ['restaurant']);
   const cafes = countKinds(amenities, ['cafe']);
@@ -95,7 +97,7 @@ export function computeBreakdown(
   const recreation = countKinds(amenities, ['recreation']);
   const service = countKinds(amenities, ['service']);
 
-  const now = Date.now();
+  const now = opts.nowMs ?? Date.now();
   const recentPermits = permits.filter((p) => {
     const t = Date.parse(p.issuedDate);
     return Number.isFinite(t) && now - t <= SIX_MONTHS_MS;
@@ -218,51 +220,23 @@ export function computeBreakdown(
 
 export interface ComputeTotalOptions {
   presence?: DataPresence;
+  weights?: WeightSet;
 }
 
 export function computeTotal(
   breakdown: ScoreBreakdown,
   options: ComputeTotalOptions = {},
 ): LivabilityScore {
-  const w = CONFIG.weights;
-  const presence: DataPresence = options.presence ?? {
-    amenityDensity: true,
-    transitScore: true,
-    foodAccess: true,
-    greenSpace: true,
-    development: true,
-    civicScore: true,
-    cultureScore: true,
-    recreationScore: true,
-    serviceScore: true,
-  };
-  const keys: (keyof ScoreBreakdown)[] = [
-    'amenityDensity',
-    'transitScore',
-    'foodAccess',
-    'greenSpace',
-    'development',
-    'civicScore',
-    'cultureScore',
-    'recreationScore',
-    'serviceScore',
-  ];
-  const presentKeys = keys.filter((k) => presence[k]);
-  const totalWeight = presentKeys.reduce((sum, k) => sum + w[k], 0);
-  const rawTotal = presentKeys.reduce(
-    (sum, k) => sum + breakdown[k] * w[k],
-    0,
-  );
-  const normalized = totalWeight > 0 ? rawTotal / totalWeight : 0;
-  const totalClamped = Math.round(clamp01(normalized));
-  const maxPossible = Math.round(totalWeight * 100);
+  const w = options.weights ?? (CONFIG.weights as WeightSet);
+  const presence: DataPresence = options.presence ?? ALL_PRESENT;
+  const { total, maxPossible } = computeTotalFromBreakdown(breakdown, presence, w);
   return {
-    total: totalClamped,
+    total,
     maxPossible,
     breakdown,
     presence,
     cityAverage: NEUTRAL,
-    ranking: computeRanking(totalClamped),
+    ranking: computeRanking(total),
   };
 }
 
@@ -276,4 +250,65 @@ export function computeRanking(score: number): Ranking {
   else if (s >= 25) label = 'Below average';
   else label = 'Bottom 25%';
   return { percentile: Math.round(s), label };
+}
+
+export interface SchoolAnalysis {
+  impacts: SchoolImpact[];
+  baseTotal: number;
+}
+
+export function analyzeSchools(
+  amenities: Amenity[],
+  permits: Permit[],
+  radiusMeters: number,
+  center: LatLon,
+  options: { nowMs?: number } = {},
+): SchoolAnalysis {
+  const schools = amenities.filter((a) => a.kind === 'school');
+  if (schools.length === 0) {
+    return { impacts: [], baseTotal: 0 };
+  }
+  const computed = computeBreakdown(amenities, permits, radiusMeters, {
+    nowMs: options.nowMs,
+  });
+  const w = CONFIG.weights as WeightSet;
+  const presentKeys = (Object.keys(computed.presence) as (keyof ScoreBreakdown)[])
+    .filter((k) => computed.presence[k]);
+  const totalWeight = presentKeys.reduce((s, k) => s + w[k], 0);
+  const baseTotal = computeTotalFromBreakdown(
+    computed.breakdown,
+    computed.presence,
+    w,
+  ).total;
+
+  const bR = pickBench('restaurant', radiusMeters);
+  const bC = pickBench('cafe', radiusMeters);
+  const bS = pickBench('school', radiusMeters);
+  const amenityP10 = bR.p10 + bC.p10 + bS.p10;
+  const amenityP90 = bR.p90 + bC.p90 + bS.p90;
+
+  const restaurants = countKinds(amenities, ['restaurant']);
+  const cafes = countKinds(amenities, ['cafe']);
+  const schoolCount = countKinds(amenities, ['school']);
+  const currentMix = restaurants + cafes + schoolCount;
+
+  const impacts: SchoolImpact[] = schools.map((s) => {
+    const altMix = currentMix - 1;
+    const altDensity = safeRound(
+      percentileScore(altMix, amenityP10, amenityP90, false),
+    );
+    const wAmenity = w.amenityDensity;
+    const deltaNum = (computed.breakdown.amenityDensity - altDensity) * wAmenity;
+    const delta = Math.round((deltaNum * 100) / Math.max(0.0001, totalWeight));
+    return {
+      id: s.id,
+      name: pickName(s),
+      distanceKm: haversineMeters(s, center) / 1000,
+      delta,
+      hasName: hasRealName(s),
+    };
+  });
+
+  impacts.sort((a, b) => b.delta - a.delta || a.distanceKm - b.distanceKm);
+  return { impacts, baseTotal };
 }

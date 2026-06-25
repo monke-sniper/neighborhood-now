@@ -91,7 +91,13 @@ async function verifyOne(addr) {
   const filename = safeFilename(addr) + '.json';
   const outPath = path.join(verificationDir, filename);
   writeFileSync(outPath, JSON.stringify(body, null, 2), 'utf-8');
-  return { address: addr, ok: true, ms, status: 200, body, outPath };
+  const corpusPath = path.join(root, 'public', 'data', 'corpus', filename);
+  try {
+    writeFileSync(corpusPath, JSON.stringify(body, null, 2), 'utf-8');
+  } catch (e) {
+    console.warn(`  ! could not write corpus file ${filename}: ${e.message}`);
+  }
+  return { address: addr, ok: true, ms, status: 200, body, outPath, corpusPath };
 }
 
 function printSummary(result) {
@@ -180,12 +186,30 @@ async function main() {
     }
   }
 
+  console.log(`[ verify ] running compare demo (a=CN Tower, b=Liberty Village)`);
+  try {
+    const compareUrl = `${BASE}/api/compare?a=${encodeURIComponent('CN Tower, Toronto')}&b=${encodeURIComponent('Liberty Village, Toronto')}`;
+    const r = await fetch(compareUrl, { signal: AbortSignal.timeout(120_000) });
+    if (r.ok) {
+      const body = await r.json();
+      const filename = 'compare-cn-tower-vs-liberty-village.json';
+      writeFileSync(path.join(verificationDir, filename), JSON.stringify(body, null, 2), 'utf-8');
+      writeFileSync(path.join(root, 'public', 'data', 'corpus', filename), JSON.stringify(body, null, 2), 'utf-8');
+      console.log(`  ✓ compare → verification/${filename} (delta=${body.delta.total})`);
+    } else {
+      console.log(`  ✗ compare failed HTTP ${r.status}`);
+    }
+  } catch (e) {
+    console.log(`  ✗ compare error: ${e.message}`);
+  }
+
   console.log(`\n[ verify ] ============ SUMMARY ============`);
   for (const r of results) printSummary(r);
 
   console.log(`\n[ verify ] ============ ARTIFACTS ============`);
   for (const r of results) {
     if (r.outPath) console.log(`  → ${r.outPath}`);
+    if (r.corpusPath) console.log(`  → ${r.corpusPath}`);
   }
 
   const allOk = results.every((r) => r.ok);

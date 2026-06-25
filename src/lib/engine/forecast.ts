@@ -45,7 +45,6 @@ function olsSlope(y: number[]): { slope: number; intercept: number; r2: number }
 
 function ewmaForecast(
   history: number[],
-  steps: number,
 ): number {
   if (history.length === 0) return 0;
   let s = history[0]!;
@@ -124,9 +123,9 @@ export function forecastTrend(
   }
 
   if (n < 6) {
-    const v6 = clamp(ewmaForecast(history, 6));
-    const v12 = clamp(ewmaForecast(history, 12));
-    const v24 = clamp(ewmaForecast(history, 24));
+    const v6 = clamp(ewmaForecast(history));
+    const v12 = clamp(ewmaForecast(history));
+    const v24 = clamp(ewmaForecast(history));
     const s = std(history);
     return {
       signal: signalName,

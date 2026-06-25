@@ -214,31 +214,22 @@ async function tryMirror(
       signal: ctrl.signal,
     });
     if (!res.ok) {
-      return { ok: false, error: `HTTP ${res.status}` };
+      throw new Error(`HTTP ${res.status} from ${mirrorUrl}`);
     }
     const text = await res.text();
     if (text.length > MAX_RESPONSE_BYTES) {
-      return {
-        ok: false,
-        error: `Response too large (${text.length} bytes)`,
-      };
+      throw new Error(`Response too large (${text.length} bytes) from ${mirrorUrl}`);
     }
     try {
       const data = JSON.parse(text) as OverpassPayload;
       return { ok: true, bytes: text.length, payload: data };
     } catch (e) {
-      return {
-        ok: false,
-        error: `JSON parse failed: ${
+      throw new Error(
+        `JSON parse failed from ${mirrorUrl}: ${
           e instanceof Error ? e.message : String(e)
         }`,
-      };
+      );
     }
-  } catch (e) {
-    return {
-      ok: false,
-      error: e instanceof Error ? e.message : String(e),
-    };
   } finally {
     clearTimeout(timer);
   }
@@ -286,15 +277,36 @@ export async function fetchOverpass(
       ? CONFIG.overpass.mirrors
       : [CONFIG.overpass.url];
 
-  let lastError = 'No mirrors configured';
-  for (const url of mirrors) {
-    const result = await tryMirror(url, query);
-    if (result.ok) {
-      return classify(result.payload.elements ?? []);
-    }
-    lastError = `${url}: ${result.error}`;
+  if (mirrors.length === 1) {
+    const result = await tryMirror(mirrors[0]!, query);
+    if (result.ok) return classify(result.payload.elements ?? []);
+    throw new Error(`Overpass mirror ${mirrors[0]} failed: ${result.error}`);
   }
-  throw new Error(`All Overpass mirrors failed. Last error: ${lastError}`);
+
+  const attempts = mirrors.map((url) =>
+    tryMirror(url, query).then(
+      (r) => {
+        if (r.ok) return r;
+        throw new Error(`${url}: ${r.error}`);
+      },
+      (e) => {
+        const msg = e instanceof Error ? e.message : String(e);
+        throw new Error(`${url}: ${msg}`);
+      },
+    ),
+  );
+
+  try {
+    const winner = await Promise.any(attempts);
+    if (winner.ok) return classify(winner.payload.elements ?? []);
+    throw new Error('All mirrors returned no payload');
+  } catch (aggErr) {
+    const errors =
+      aggErr instanceof AggregateError
+        ? aggErr.errors.map((e) => (e instanceof Error ? e.message : String(e)))
+        : [aggErr instanceof Error ? aggErr.message : String(aggErr)];
+    throw new Error(`All Overpass mirrors failed: ${errors.join(' | ')}`);
+  }
 }
 
 export type OverpassFetchResult = {

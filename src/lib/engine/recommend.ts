@@ -1,4 +1,4 @@
-import { SCENARIOS, simulateWhatIf } from './whatif';
+import { SCENARIOS, scenarioDelta } from './whatif';
 import type {
   NeighborhoodReport,
   Recommendation,
@@ -83,13 +83,13 @@ export function fallbackRecs(report: NeighborhoodReport): Recommendation[] {
     if (!scenarioId || used.has(scenarioId)) continue;
     used.add(scenarioId);
     const scenario = SCENARIOS.find((s) => s.id === scenarioId)!;
-    const sim = simulateWhatIf(report.score.breakdown, scenario);
+    const delta = scenarioDelta(breakdown, scenarioId);
     out.push({
       id: `rec-${out.length + 1}`,
       title: `Build a ${scenario.name.toLowerCase()}`,
-      reasoning: `${COMPONENT_LABEL[key]} is the weakest component at ${breakdown[key]}/100. ${scenario.name} would lift it by ${sim.delta} pts.`,
+      reasoning: `${COMPONENT_LABEL[key]} is the weakest component at ${breakdown[key]}/100. ${scenario.name} would lift it by ${delta} pts.`,
       scenarioId,
-      expectedDelta: sim.delta,
+      expectedDelta: delta,
     });
   }
   return out.slice(0, 3);

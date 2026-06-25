@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import type { ChatResponse, NeighborhoodReport } from '@/lib/types';
-import { clientHeaders, loadClientKeys } from '@/lib/api/client';
+import { clientHeaders, loadClientKeys } from '@/lib/keys';
 
 interface Props {
   report: NeighborhoodReport;

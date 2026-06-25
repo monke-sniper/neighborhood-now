@@ -41,7 +41,6 @@ function formatScore(score: number): string {
 
 export function ScoreBar({
   explanation,
-  isModified,
   modifiedScore,
   modifiedTier,
 }: Props) {

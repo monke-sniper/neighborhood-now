@@ -80,7 +80,7 @@ export function AmenityList({ report, radiusMeters }: Props) {
           >
             <summary className="cursor-pointer select-none px-3 py-1.5 flex items-center justify-between text-[10px] uppercase tracking-widest text-[var(--color-text-dim)] hover:text-[var(--color-accent)] transition">
               <span>
-                [ {label} // {total} ]{' '}
+                [ {label} {'/'} {total} ]{' '}
                 {total > PER_SECTION ? (
                   <span className="text-[var(--color-text-mute)]">
                     (showing {PER_SECTION})
@@ -124,7 +124,7 @@ export function AmenityList({ report, radiusMeters }: Props) {
         <div className="text-xs text-[var(--color-text-mute)] uppercase tracking-wider py-2 text-center leading-relaxed">
           {report.sources.overpass === 'failed' || report.sources.overpass === 'partial' ? (
             <>
-              [ OSM {report.sources.overpass.toUpperCase()} // OVERPASS API DID NOT RETURN DATA IN TIME ]
+              [ OSM {report.sources.overpass.toUpperCase()} {'/'} OVERPASS API DID NOT RETURN DATA IN TIME ]
               <br />
               <span className="text-[10px]">
                 PERMITS + 311 DATA ARE STILL AVAILABLE ABOVE. RETRY OR TRY A DIFFERENT ADDRESS.

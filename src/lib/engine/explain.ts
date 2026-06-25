@@ -1,5 +1,6 @@
 import { BENCHMARKS, scaleBench, type BenchKey } from './benchmarks';
 import { CONFIG } from '../config';
+import type { DataPresence } from './score.types';
 import type {
   Amenity,
   LivabilityScore,
@@ -88,6 +89,7 @@ function countBreakdown(
   key: keyof ScoreBreakdown,
   amenities: Amenity[],
   permits: Permit[],
+  nowMs: number,
 ): Record<string, number> {
   switch (key) {
     case 'amenityDensity':
@@ -106,11 +108,10 @@ function countBreakdown(
     case 'greenSpace':
       return { parks: countByKind(amenities, ['park']) };
     case 'development': {
-      const now = Date.now();
       const sixMonthsMs = 1000 * 60 * 60 * 24 * 30 * 6;
       const recent = permits.filter((p) => {
         const t = Date.parse(p.issuedDate);
-        return Number.isFinite(t) && now - t <= sixMonthsMs;
+        return Number.isFinite(t) && nowMs - t <= sixMonthsMs;
       }).length;
       return {
         recent_permits: recent,
@@ -182,7 +183,8 @@ export function explainOne(
   amenities: Amenity[],
   permits: Permit[],
   radius: number,
-  presence?: Record<keyof ScoreBreakdown, boolean>,
+  presence?: DataPresence,
+  opts: { nowMs?: number } = {},
 ): ScoreExplanation {
   const score = breakdown[key];
   const w = CONFIG.weights[key];
@@ -200,7 +202,7 @@ export function explainOne(
   const percentile: PercentileLabel = isMissing
     ? 'Bottom 25%'
     : percentileFor(score);
-  const parts = countBreakdown(key, amenities, permits);
+  const parts = countBreakdown(key, amenities, permits, opts.nowMs ?? Date.now());
   const total = totalCount(parts);
   const sentence = isMissing
     ? `${LABELS[key]}: no data for this area (component excluded from score).`
@@ -235,10 +237,11 @@ export function explainAll(
   amenities: Amenity[],
   permits: Permit[],
   radius: number,
+  opts: { nowMs?: number } = {},
 ): ScoreExplanation[] {
   const keys = Object.keys(LABELS) as (keyof ScoreBreakdown)[];
   const presence = score.presence;
   return keys.map((k) =>
-    explainOne(k, score.breakdown, amenities, permits, radius, presence),
+    explainOne(k, score.breakdown, amenities, permits, radius, presence, opts),
   );
 }

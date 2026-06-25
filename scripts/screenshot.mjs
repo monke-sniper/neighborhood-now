@@ -54,7 +54,7 @@ async function main() {
 
     try {
       await page.waitForSelector('text=LIVABILITY SCORE', { timeout: 30000 });
-    } catch (e) {
+    } catch {
       console.error(`     FAIL: never saw LIVABILITY SCORE`);
       await page.screenshot({ path: `${OUT}/${n}-${addr.replace(/[^a-z0-9]/gi, '_')}-failed.png`, fullPage: true });
       continue;

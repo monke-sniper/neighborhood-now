@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   DEFAULT_KEYS,
   clearClientKeys,
   loadClientKeys,
   saveClientKeys,
   type ClientKeys,
-} from '@/lib/api/client';
+} from '@/lib/keys';
 
 function configuredPill(value: string, fallback: string): string {
   if (value && value !== fallback) return '[ CONFIGURED ]';
@@ -16,12 +16,8 @@ function configuredPill(value: string, fallback: string): string {
 
 export function SettingsPanel() {
   const [open, setOpen] = useState(false);
-  const [keys, setKeys] = useState<ClientKeys>(DEFAULT_KEYS);
+  const [keys, setKeys] = useState<ClientKeys>(() => loadClientKeys());
   const [saved, setSaved] = useState(false);
-
-  useEffect(() => {
-    if (open) setKeys(loadClientKeys());
-  }, [open]);
 
   function update<K extends keyof ClientKeys>(k: K, v: ClientKeys[K]) {
     setSaved(false);

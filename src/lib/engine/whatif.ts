@@ -1,4 +1,6 @@
-import { computeTotal } from './score';
+import { CONFIG } from '../config';
+import { computeTotalFromBreakdown } from './score.total';
+import { ALL_PRESENT, type DataPresence, type WeightSet } from './score.types';
 import type { Scenario, ScenarioResult, ScoreBreakdown } from '../types';
 
 const clamp = (n: number) => Math.max(0, Math.min(100, n));
@@ -114,24 +116,38 @@ function resolveImpact(
   return out;
 }
 
+export function applyImpacts(
+  current: ScoreBreakdown,
+  deltas: Partial<ScoreBreakdown>,
+): ScoreBreakdown {
+  return {
+    amenityDensity: clamp(current.amenityDensity + (deltas.amenityDensity ?? 0)),
+    transitScore: clamp(current.transitScore + (deltas.transitScore ?? 0)),
+    foodAccess: clamp(current.foodAccess + (deltas.foodAccess ?? 0)),
+    greenSpace: clamp(current.greenSpace + (deltas.greenSpace ?? 0)),
+    development: clamp(current.development + (deltas.development ?? 0)),
+    civicScore: clamp(current.civicScore + (deltas.civicScore ?? 0)),
+    cultureScore: clamp(current.cultureScore + (deltas.cultureScore ?? 0)),
+    recreationScore: clamp(current.recreationScore + (deltas.recreationScore ?? 0)),
+    serviceScore: clamp(current.serviceScore + (deltas.serviceScore ?? 0)),
+  };
+}
+
+export function totalFor(
+  breakdown: ScoreBreakdown,
+  presence: DataPresence = ALL_PRESENT,
+  weights: WeightSet = CONFIG.weights as WeightSet,
+): number {
+  return computeTotalFromBreakdown(breakdown, presence, weights).total;
+}
+
 export function simulateWhatIf(
   current: ScoreBreakdown,
   scenario: Scenario,
 ): ScenarioResult {
-  const before = computeTotal(current).total;
-  const resolved = resolveImpact(scenario.impact, current);
-  const modified: ScoreBreakdown = {
-    amenityDensity: clamp(current.amenityDensity + (resolved.amenityDensity ?? 0)),
-    transitScore: clamp(current.transitScore + (resolved.transitScore ?? 0)),
-    foodAccess: clamp(current.foodAccess + (resolved.foodAccess ?? 0)),
-    greenSpace: clamp(current.greenSpace + (resolved.greenSpace ?? 0)),
-    development: clamp(current.development + (resolved.development ?? 0)),
-    civicScore: clamp(current.civicScore + (resolved.civicScore ?? 0)),
-    cultureScore: clamp(current.cultureScore + (resolved.cultureScore ?? 0)),
-    recreationScore: clamp(current.recreationScore + (resolved.recreationScore ?? 0)),
-    serviceScore: clamp(current.serviceScore + (resolved.serviceScore ?? 0)),
-  };
-  const after = computeTotal(modified).total;
+  const before = totalFor(current);
+  const modified = applyImpacts(current, resolveImpact(scenario.impact, current));
+  const after = totalFor(modified);
   return {
     scenarioId: scenario.id,
     before,
@@ -139,4 +155,39 @@ export function simulateWhatIf(
     delta: after - before,
     modifiedBreakdown: modified,
   };
+}
+
+export interface ComposedScenarios {
+  breakdown: ScoreBreakdown;
+  total: number;
+  delta: number;
+  perScenario: Array<{ id: string; delta: number }>;
+}
+
+export function composeScenarios(
+  current: ScoreBreakdown,
+  active: Iterable<string>,
+): ComposedScenarios {
+  const before = totalFor(current);
+  let breakdown: ScoreBreakdown = { ...current };
+  const perScenario: Array<{ id: string; delta: number }> = [];
+  for (const id of active) {
+    const s = SCENARIOS.find((x) => x.id === id);
+    if (!s) continue;
+    const beforeStep = totalFor(breakdown);
+    breakdown = applyImpacts(breakdown, resolveImpact(s.impact, breakdown));
+    const afterStep = totalFor(breakdown);
+    perScenario.push({ id, delta: afterStep - beforeStep });
+  }
+  const total = totalFor(breakdown);
+  return { breakdown, total, delta: total - before, perScenario };
+}
+
+export function scenarioDelta(
+  current: ScoreBreakdown,
+  scenarioId: string,
+): number {
+  const s = SCENARIOS.find((x) => x.id === scenarioId);
+  if (!s) return 0;
+  return simulateWhatIf(current, s).delta;
 }

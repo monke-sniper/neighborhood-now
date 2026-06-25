@@ -7,7 +7,7 @@ import type {
   RecommendationResponse,
   RecommendationThinking,
 } from '@/lib/types';
-import { clientHeaders } from '@/lib/api/client';
+import { clientHeaders } from '@/lib/keys';
 
 interface Props {
   report: NeighborhoodReport;
@@ -15,23 +15,29 @@ interface Props {
   onActivate: (scenarioId: string) => void;
 }
 
-const CACHE_KEY = 'nn:recommendations:v2';
+const CACHE_KEY = 'nn:recommendations:v3';
 
 interface CachedRecs {
+  key: string;
   address: string;
+  radiusMeters: number;
   recommendations: Recommendation[];
   thinking: RecommendationThinking;
   ideas: string;
   modelUsed: string;
 }
 
-function loadCache(address: string): CachedRecs | null {
+function cacheKeyFor(address: string, radiusMeters: number): string {
+  return `${address.trim().toLowerCase()}|${radiusMeters}`;
+}
+
+function loadCache(address: string, radiusMeters: number): CachedRecs | null {
   if (typeof window === 'undefined') return null;
   try {
     const raw = window.localStorage.getItem(CACHE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as CachedRecs;
-    return parsed.address === address ? parsed : null;
+    return parsed.key === cacheKeyFor(address, radiusMeters) ? parsed : null;
   } catch {
     return null;
   }
@@ -72,12 +78,16 @@ export function RecommendationsPanel({
 
   useEffect(() => {
     let cancelled = false;
-    const cached = loadCache(report.address);
+    const radiusMeters = report.radiusMeters ?? 3000;
+    const cached = loadCache(report.address, radiusMeters);
     if (cached) {
-      setRecs(cached.recommendations);
-      setThinking(cached.thinking);
-      setIdeas(cached.ideas);
-      setModelUsed(cached.modelUsed);
+      queueMicrotask(() => {
+        if (cancelled) return;
+        setRecs(cached.recommendations);
+        setThinking(cached.thinking);
+        setIdeas(cached.ideas);
+        setModelUsed(cached.modelUsed);
+      });
       return;
     }
     setRecs([]);
@@ -103,7 +113,9 @@ export function RecommendationsPanel({
         setIdeas(data.ideas);
         setModelUsed(data.modelUsed);
         saveCache({
+          key: cacheKeyFor(report.address, radiusMeters),
           address: report.address,
+          radiusMeters,
           recommendations: data.recommendations,
           thinking: data.thinking,
           ideas: data.ideas,

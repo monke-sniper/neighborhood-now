@@ -1,5 +1,5 @@
 import type { NeighborhoodReport, ScoreBreakdown } from '@/lib/types';
-import { computeRanking, computeTotal } from '@/lib/engine/score';
+import { computeRanking } from '@/lib/engine/score';
 import { tierFor } from '@/lib/engine/explain';
 import { ScoreBar } from './ScoreBar';
 

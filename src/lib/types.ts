@@ -95,6 +95,7 @@ export interface Anomaly {
   zscore: number;
   severity: 'warning' | 'critical';
   message: string;
+  category: 'gentrification' | 'livability' | 'quality-of-life' | 'environment';
 }
 
 export interface Trend {
@@ -163,6 +164,15 @@ export interface NeighborhoodReport {
   };
   errors?: Record<string, string | null>;
   benchmarksCapturedAt?: string;
+  schoolImpacts?: SchoolImpact[];
+}
+
+export interface SchoolImpact {
+  id: string;
+  name: string;
+  distanceKm: number;
+  delta: number;
+  hasName: boolean;
 }
 
 export interface ChatRequest {

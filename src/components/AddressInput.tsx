@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import type { NeighborhoodReport } from '@/lib/types';
-import { clientHeaders } from '@/lib/api/client';
+import { clientHeaders } from '@/lib/keys';
 
 interface Props {
   onReport: (r: NeighborhoodReport) => void;
+  onAddress?: (addr: string) => void;
   onLoadingChange?: (loading: boolean) => void;
   radius: number;
   hasReport?: boolean;
@@ -29,7 +30,7 @@ function formatPhase(stage: 'idle' | 'fetching' | 'retrying' | 'failed'): string
   return '';
 }
 
-export function AddressInput({ onReport, onLoadingChange, radius, hasReport }: Props) {
+export function AddressInput({ onReport, onAddress, onLoadingChange, radius, hasReport }: Props) {
   const [value, setValue] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -103,7 +104,11 @@ export function AddressInput({ onReport, onLoadingChange, radius, hasReport }: P
 
   function tryExample(addr: string) {
     setValue(addr);
-    void fetchReport(addr);
+    if (onAddress) {
+      onAddress(addr);
+    } else {
+      void fetchReport(addr);
+    }
   }
 
   function manualRetry() {

@@ -17,13 +17,15 @@ export async function POST(
     !body ||
     !body.scoreBreakdown ||
     !body.amenityCounts ||
+    typeof body.permitsLast30d !== 'number' ||
     typeof body.permitsLast6m !== 'number' ||
+    typeof body.complaintsLast30d !== 'number' ||
     typeof body.complaintsLast90d !== 'number'
   ) {
     return NextResponse.json(
       {
         error:
-          'Requires { permitsLast6m, complaintsLast90d, amenityCounts, scoreBreakdown, airQuality?, census? }',
+          'Requires { permitsLast30d, permitsLast6m, complaintsLast30d, complaintsLast90d, amenityCounts, scoreBreakdown, airQuality?, census? }',
       },
       { status: 400 },
     );
