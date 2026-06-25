@@ -4,6 +4,7 @@ import { extractJson, fallbackRecs, sanitizeRecs } from '@/lib/engine/recommend'
 import type {
   RecommendationRequest,
   RecommendationResponse,
+  RecommendationThinking,
 } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -31,6 +32,20 @@ Rules:
 - expectedDelta is your best guess at the total-score delta, integer 0-25
 - Order by expected impact descending`;
 
+const IDEAS_PROMPT = `You are a creative urban strategist brainstorming unconventional, high-leverage ideas for a specific neighborhood based on its data report.
+
+Given the neighborhood report, generate 3 to 4 creative, non-obvious ideas that go BEYOND the standard scenarios (no new subway, park, grocery, school, development, transit strike). Think:
+
+- Tactical urbanism experiments (e.g. "parking-to-parklet conversions on side streets")
+- Programming activations (e.g. "monthly night market", "outdoor library")
+- Local economy initiatives (e.g. "BIPOC-owned business incubator", "tool library")
+- Mobility hacks (e.g. "free e-bike share pilot", "school-bus-as-public-transit program")
+- Public realm micro-interventions (e.g. "murals on blank walls", "tactical crosswalks")
+
+Each idea should be 1-2 sentences, specific to the neighborhood's data (e.g. if greenSpace is low, don't suggest another park), and end with a one-line expected impact.
+
+Format your response as plain prose with bullet points (use • for bullets, no JSON, no markdown headers). Keep it under 200 words total.`;
+
 function buildContext(report: RecommendationRequest['report']): string {
   const topComponents = Object.entries(report.score.breakdown)
     .map(([k, v]) => ({ k, v }))
@@ -42,6 +57,7 @@ function buildContext(report: RecommendationRequest['report']): string {
     {
       address: report.address,
       score: report.score.total,
+      maxPossible: report.score.maxPossible,
       ranking: report.score.ranking.label,
       weakestComponents: topComponents,
       breakdown: report.score.breakdown,
@@ -63,6 +79,53 @@ function buildContext(report: RecommendationRequest['report']): string {
   );
 }
 
+async function callOllamaChat(
+  base: string,
+  key: string,
+  model: string,
+  messages: Array<{ role: string; content: string }>,
+  format?: 'json',
+): Promise<string | null> {
+  try {
+    const body: Record<string, unknown> = {
+      model,
+      stream: false,
+      messages,
+    };
+    if (format) body.format = format;
+    const res = await fetch(`${base}/api/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify(body),
+      cache: 'no-store',
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { message?: { content?: string } };
+    return data.message?.content ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function fallbackThinking(
+  prompt: string,
+  fallbackReason: string,
+  modelUsed: string,
+): RecommendationThinking {
+  return {
+    prompt,
+    raw: `[ AI FALLBACK ] ${fallbackReason}\n\nThe recommendations below were generated deterministically from the weakest score components — no model was called.`,
+    modelUsed,
+  };
+}
+
+function fallbackIdeas(reason: string): string {
+  return `• [ IDEA FALLBACK ] AI creative-idea generation is unavailable (${reason}). Try: (1) walk the neighborhood and photograph blank walls for a mural pilot, (2) ask 5 local businesses what they need most, (3) run a one-day parking-to-parklet on a low-traffic side street.`;
+}
+
 export async function POST(
   req: Request,
 ): Promise<NextResponse<RecommendationResponse | { error: string }>> {
@@ -77,6 +140,7 @@ export async function POST(
   }
 
   const fallback = fallbackRecs(body.report);
+  const userMessage = `NEIGHBORHOOD REPORT:\n${buildContext(body.report)}`;
 
   const ollamaKey = req.headers.get('X-Ollama-Key') ?? SERVER_OLLAMA_KEY;
   const ollamaBase = req.headers.get('X-Ollama-Base') ?? DEFAULT_OLLAMA_BASE;
@@ -85,48 +149,42 @@ export async function POST(
   if (!ollamaKey) {
     return NextResponse.json({
       recommendations: fallback,
+      thinking: fallbackThinking(userMessage, 'no Ollama API key configured', 'fallback'),
+      ideas: fallbackIdeas('no Ollama API key configured'),
       modelUsed: 'fallback',
     });
   }
 
-  try {
-    const res = await fetch(`${ollamaBase}/api/chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${ollamaKey}`,
-      },
-      body: JSON.stringify({
-        model: ollamaModel,
-        stream: false,
-        format: 'json',
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: `NEIGHBORHOOD REPORT:\n${buildContext(body.report)}` },
-        ],
-      }),
-      cache: 'no-store',
-    });
+  const [recsRaw, ideasRaw] = await Promise.all([
+    callOllamaChat(ollamaBase, ollamaKey, ollamaModel, [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: userMessage },
+    ], 'json'),
+    callOllamaChat(ollamaBase, ollamaKey, ollamaModel, [
+      { role: 'system', content: IDEAS_PROMPT },
+      { role: 'user', content: userMessage },
+    ]),
+  ]);
 
-    if (!res.ok) {
-      return NextResponse.json({
-        recommendations: fallback,
-        modelUsed: ollamaModel,
-      });
-    }
+  const thinking: RecommendationThinking = {
+    prompt: userMessage,
+    raw: recsRaw ?? `[ AI CALL FAILED ] The recommendation model call returned no content. Falling back to deterministic ranking.`,
+    modelUsed: ollamaModel,
+  };
 
-    const data = (await res.json()) as { message?: { content?: string } };
-    const raw = data.message?.content ?? '';
-    const parsed = extractJson(raw);
+  let recommendations = fallback;
+  if (recsRaw) {
+    const parsed = extractJson(recsRaw);
     const cleaned = sanitizeRecs(parsed);
-    return NextResponse.json({
-      recommendations: cleaned.length > 0 ? cleaned : fallback,
-      modelUsed: ollamaModel,
-    });
-  } catch {
-    return NextResponse.json({
-      recommendations: fallback,
-      modelUsed: ollamaModel,
-    });
+    if (cleaned.length > 0) recommendations = cleaned;
   }
+
+  const ideas = ideasRaw ?? fallbackIdeas('creative-idea call returned no content');
+
+  return NextResponse.json({
+    recommendations,
+    thinking,
+    ideas,
+    modelUsed: ollamaModel,
+  });
 }

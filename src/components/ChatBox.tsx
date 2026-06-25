@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ChatResponse, NeighborhoodReport } from '@/lib/types';
-import { clientHeaders } from '@/lib/api/client';
+import { clientHeaders, loadClientKeys } from '@/lib/api/client';
 
 interface Props {
   report: NeighborhoodReport;
@@ -17,6 +17,15 @@ export function ChatBox({ report }: Props) {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [hasKey, setHasKey] = useState(false);
+  const [modelName, setModelName] = useState('gpt-oss:20b');
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const k = loadClientKeys();
+    setHasKey(Boolean(k.ollamaKey));
+    setModelName(k.ollamaModel || 'gpt-oss:20b');
+  }, []);
 
   async function send(e: React.FormEvent) {
     e.preventDefault();
@@ -56,7 +65,16 @@ export function ChatBox({ report }: Props) {
           [ ASK // NEIGHBORHOOD AI ]
         </h2>
         <div className="text-[10px] text-[var(--color-text-mute)] uppercase tracking-wider">
-          MODEL: OLLAMA
+          MODEL:{' '}
+          <span
+            className={
+              hasKey
+                ? 'text-[var(--color-accent)]'
+                : 'text-[var(--color-warn)]'
+            }
+          >
+            {hasKey ? `${modelName.toUpperCase()} (READY)` : 'NOT CONFIGURED'}
+          </span>
         </div>
       </div>
 

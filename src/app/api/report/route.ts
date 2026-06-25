@@ -12,6 +12,7 @@ import { explainAll } from '@/lib/engine/explain';
 import { log } from '@/lib/logger';
 import { TTLCache } from '@/lib/utils/cache';
 import { CONFIG, parseRadius } from '@/lib/config';
+import { BENCHMARKS } from '@/lib/engine/benchmarks';
 import type { NeighborhoodReport } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -179,8 +180,9 @@ export async function GET(req: Request): Promise<NextResponse> {
       fellBack: oValue.fellBack,
     });
 
-    const breakdown = computeBreakdown(amenities.amenities, permits, radius);
-    const score = computeTotal(breakdown);
+    const computed = computeBreakdown(amenities.amenities, permits, radius);
+    const breakdown = computed.breakdown;
+    const score = computeTotal(breakdown, { presence: computed.presence });
     const explanations = explainAll(score, amenities.amenities, permits, radius);
 
     const months = lastNMonths(12);
@@ -197,23 +199,6 @@ export async function GET(req: Request): Promise<NextResponse> {
     const complaintsTrend = forecastTrend(complaintsByMonth, '311 complaints');
     const trends = [permitsTrend, complaintsTrend];
 
-    const permitCurrent = permitsByMonth[permitsByMonth.length - 1] ?? 0;
-    const complaintCurrent = complaintsByMonth[complaintsByMonth.length - 1] ?? 0;
-    const permitBaseline =
-      permitsByMonth.length > 1
-        ? permitsByMonth.slice(0, -1).reduce((a, b) => a + b, 0) /
-          (permitsByMonth.length - 1)
-        : 0;
-    const complaintBaseline =
-      complaintsByMonth.length > 1
-        ? complaintsByMonth.slice(0, -1).reduce((a, b) => a + b, 0) /
-          (complaintsByMonth.length - 1)
-        : 0;
-
-    void permitCurrent;
-    void permitBaseline;
-    void complaintBaseline;
-
     const nowMs = Date.now();
     const sixMonthsMs = 1000 * 60 * 60 * 24 * 30 * 6;
     const ninetyDaysMs = 1000 * 60 * 60 * 24 * 90;
@@ -227,18 +212,13 @@ export async function GET(req: Request): Promise<NextResponse> {
     }).length;
 
     const amenityCounts = {
-      restaurant: amenities.amenities.filter((a) => a.kind === 'restaurant').length,
-      cafe: amenities.amenities.filter((a) => a.kind === 'cafe').length,
-      school: amenities.amenities.filter((a) => a.kind === 'school').length,
-      grocery: amenities.amenities.filter((a) => a.kind === 'grocery').length,
-      park: amenities.amenities.filter((a) => a.kind === 'park').length,
-      transit:
-        amenities.amenities.filter(
-          (a) => a.kind === 'bus_stop' || a.kind === 'transit',
-        ).length + amenities.transit.length,
-      construction: amenities.amenities.filter(
-        (a) => a.kind === 'construction',
-      ).length,
+      restaurant: computed.counts.restaurants,
+      cafe: computed.counts.cafes,
+      school: computed.counts.schools,
+      grocery: computed.counts.groceries,
+      park: computed.counts.parks,
+      transit: computed.counts.transit,
+      construction: computed.counts.construction,
     };
 
     const anomalyCtx: AnomalyContext = {
@@ -248,6 +228,7 @@ export async function GET(req: Request): Promise<NextResponse> {
       scoreBreakdown: breakdown,
       airQuality: airQuality ? { pm25: airQuality.pm25 } : null,
       census: census ? { medianIncome: census.medianIncome } : null,
+      radiusMeters: radius,
     };
 
     const anomalies = detectAnomalies(anomalyCtx);
@@ -272,6 +253,7 @@ export async function GET(req: Request): Promise<NextResponse> {
         weather: w.ok ? 'ok' : 'failed',
       },
       errors: errorMap,
+      benchmarksCapturedAt: BENCHMARKS.capturedAt,
     };
 
     if (debug) {

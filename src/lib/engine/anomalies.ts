@@ -35,6 +35,10 @@ function signalFromAmenity(
   };
 }
 
+function radiusLabel(m: number): string {
+  return m >= 1000 ? `${m / 1000}km` : `${m}m`;
+}
+
 function severityFor(absZ: number): Anomaly['severity'] | null {
   if (absZ > 3) return 'critical';
   if (absZ > ZSCORE_THRESHOLD) return 'warning';
@@ -75,22 +79,24 @@ export interface AnomalyContext {
   scoreBreakdown: ScoreBreakdown;
   airQuality: { pm25: number } | null;
   census: { medianIncome: number } | null;
+  radiusMeters?: number;
 }
 
 export function detectAnomalies(ctx: AnomalyContext): Anomaly[] {
+  const r = radiusLabel(ctx.radiusMeters ?? 3000);
   const signals: Signal[] = [
     signalFromScore('Overall livability', ctx.scoreBreakdown.amenityDensity, BENCHMARKS.metrics.restaurant.p50, 'pts'),
     signalFromScore('Transit access', ctx.scoreBreakdown.transitScore, BENCHMARKS.metrics.transit.p50, 'pts'),
     signalFromScore('Food access', ctx.scoreBreakdown.foodAccess, BENCHMARKS.metrics.grocery.p50, 'pts'),
     signalFromScore('Green space', ctx.scoreBreakdown.greenSpace, BENCHMARKS.metrics.park.p50, 'pts'),
     signalFromScore('Development activity', ctx.scoreBreakdown.development, BENCHMARKS.metrics.construction.p50, 'pts'),
-    signalFromAmenity('Restaurants in 1500m', ctx.amenityCounts.restaurant, 'restaurant', 'places'),
-    signalFromAmenity('Cafés in 1500m', ctx.amenityCounts.cafe, 'cafe', 'places'),
-    signalFromAmenity('Schools in 1500m', ctx.amenityCounts.school, 'school', 'places'),
-    signalFromAmenity('Grocery in 1500m', ctx.amenityCounts.grocery, 'grocery', 'stores'),
-    signalFromAmenity('Park areas in 1500m', ctx.amenityCounts.park, 'park', 'areas'),
-    signalFromAmenity('Transit stops in 1500m', ctx.amenityCounts.transit, 'transit', 'stops'),
-    signalFromAmenity('Construction sites in 1500m', ctx.amenityCounts.construction, 'construction', 'sites'),
+    signalFromAmenity(`Restaurants in ${r}`, ctx.amenityCounts.restaurant, 'restaurant', 'places'),
+    signalFromAmenity(`Cafés in ${r}`, ctx.amenityCounts.cafe, 'cafe', 'places'),
+    signalFromAmenity(`Schools in ${r}`, ctx.amenityCounts.school, 'school', 'places'),
+    signalFromAmenity(`Grocery in ${r}`, ctx.amenityCounts.grocery, 'grocery', 'stores'),
+    signalFromAmenity(`Park areas in ${r}`, ctx.amenityCounts.park, 'park', 'areas'),
+    signalFromAmenity(`Transit stops in ${r}`, ctx.amenityCounts.transit, 'transit', 'stops'),
+    signalFromAmenity(`Construction sites in ${r}`, ctx.amenityCounts.construction, 'construction', 'sites'),
   ];
 
   if (ctx.permitsLast6m > 0) {

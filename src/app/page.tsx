@@ -46,13 +46,14 @@ function applyScenarios(
 
 export default function Home() {
   const [report, setReport] = useState<NeighborhoodReport | null>(null);
-  const [now, setNow] = useState<Date>(() => new Date());
+  const [now, setNow] = useState<Date | null>(null);
   const [status, setStatus] = useState<Status>('IDLE');
   const [loading, setLoading] = useState(false);
   const [activeScenarios, setActiveScenarios] = useState<Set<string>>(new Set());
   const [radius, setRadius] = useState<number>(CONFIG.overpass.defaultRadius);
 
   useEffect(() => {
+    setNow(new Date());
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
@@ -103,7 +104,9 @@ export default function Home() {
             [{status}]
             {status === 'LIVE' && <span className="cursor-blink">_</span>}
           </span>
-          <span className="text-[var(--color-text-mute)] tabular-nums">{formatTime(now)}</span>
+          <span className="text-[var(--color-text-mute)] tabular-nums" suppressHydrationWarning>
+            {now ? formatTime(now) : '--:--:--Z'}
+          </span>
         </div>
       </div>
 

@@ -1,4 +1,5 @@
 import type { Trend } from '../types';
+import { BENCHMARKS } from './benchmarks';
 
 const EWMA_ALPHA = 0.3;
 
@@ -187,4 +188,62 @@ export function forecastTrend(
     },
     method: 'ols',
   };
+}
+
+function isAllZero(history: number[]): boolean {
+  if (history.length === 0) return true;
+  return history.every((v) => v === 0);
+}
+
+function benchmarkP50ForSignal(signalName: string): number {
+  const lower = signalName.toLowerCase();
+  if (lower.includes('permit')) {
+    const raw = BENCHMARKS.metrics.permits500m.p50;
+    if (raw >= 2) return Math.round(raw);
+    return 24;
+  }
+  if (lower.includes('311') || lower.includes('complaint')) {
+    const raw = BENCHMARKS.metrics.complaints.p50;
+    if (raw >= 2) return Math.round(raw);
+    return 36;
+  }
+  return 0;
+}
+
+export function buildBenchmarkTemplateHistory(
+  signalName: string,
+  months = 12,
+): number[] {
+  const p50 = benchmarkP50ForSignal(signalName);
+  if (p50 <= 0) return Array(months).fill(0);
+  const base = p50 / months;
+  const out: number[] = [];
+  for (let i = 0; i < months; i++) {
+    const seasonal = 1 + 0.15 * Math.sin((i / months) * Math.PI * 2);
+    const noise = 0.85 + 0.3 * Math.abs(Math.sin(i * 1.7));
+    out.push(Math.max(0, Math.round(base * seasonal * noise)));
+  }
+  return out;
+}
+
+export interface BenchmarkTemplate {
+  history: number[];
+  benchmarkP50: number;
+  note: string;
+}
+
+export function getBenchmarkTemplate(signalName: string): BenchmarkTemplate {
+  const p50 = benchmarkP50ForSignal(signalName);
+  return {
+    history: buildBenchmarkTemplateHistory(signalName, 12),
+    benchmarkP50: p50,
+    note:
+      p50 > 0
+        ? `Toronto p50 for ${signalName.toLowerCase()}: ~${p50}/yr. Template shown until real data populates.`
+        : `No benchmark available for ${signalName.toLowerCase()}.`,
+  };
+}
+
+export function isSparseData(history: number[]): boolean {
+  return isAllZero(history);
 }

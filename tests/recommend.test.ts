@@ -10,6 +10,7 @@ function makeReport(overrides: Partial<NeighborhoodReport['score']['breakdown']>
     radiusMeters: 3000,
     score: {
       total: 50,
+      maxPossible: 100,
       breakdown: {
         amenityDensity: overrides.amenityDensity ?? 50,
         transitScore: overrides.transitScore ?? 50,
@@ -20,6 +21,17 @@ function makeReport(overrides: Partial<NeighborhoodReport['score']['breakdown']>
         cultureScore: overrides.cultureScore ?? 50,
         recreationScore: overrides.recreationScore ?? 50,
         serviceScore: overrides.serviceScore ?? 50,
+      },
+      presence: {
+        amenityDensity: true,
+        transitScore: true,
+        foodAccess: true,
+        greenSpace: true,
+        development: true,
+        civicScore: true,
+        cultureScore: true,
+        recreationScore: true,
+        serviceScore: true,
       },
       cityAverage: 50,
       ranking: { percentile: 50, label: 'Average' },

@@ -71,7 +71,9 @@ export interface ScoreBreakdown {
 
 export interface LivabilityScore {
   total: number;
+  maxPossible: number;
   breakdown: ScoreBreakdown;
+  presence: import('./engine/score').DataPresence;
   cityAverage: number;
   ranking: Ranking;
 }
@@ -153,13 +155,14 @@ export interface NeighborhoodReport {
   anomalies: Anomaly[];
   trends: Trend[];
   sources: {
-    overpass: 'ok' | 'failed' | 'partial';
+    overpass: 'ok' | 'partial' | 'failed';
     builddata: 'ok' | 'failed' | 'skipped';
     complaints: 'ok' | 'failed' | 'skipped';
     census: 'ok' | 'failed' | 'skipped';
     weather: 'ok' | 'failed' | 'skipped';
   };
   errors?: Record<string, string | null>;
+  benchmarksCapturedAt?: string;
 }
 
 export interface ChatRequest {
@@ -180,11 +183,19 @@ export interface Recommendation {
   expectedDelta: number;
 }
 
+export interface RecommendationThinking {
+  prompt: string;
+  raw: string;
+  modelUsed: string;
+}
+
 export interface RecommendationRequest {
   report: NeighborhoodReport;
 }
 
 export interface RecommendationResponse {
   recommendations: Recommendation[];
+  thinking: RecommendationThinking;
+  ideas: string;
   modelUsed: string;
 }

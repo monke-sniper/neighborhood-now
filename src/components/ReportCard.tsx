@@ -53,7 +53,11 @@ export function ReportCard({ report, modified }: Props) {
   const isModified = Boolean(modified);
   const totalShown = modified ? modified.total : score.total;
   const totalOriginal = score.total;
+  const maxPossible = score.maxPossible;
   const radiusKm = radiusMeters >= 1000 ? `${radiusMeters / 1000}km` : `${radiusMeters}m`;
+  const missingCount = (Object.values(score.presence) as boolean[]).filter(
+    (v) => !v,
+  ).length;
 
   return (
     <div
@@ -74,9 +78,11 @@ export function ReportCard({ report, modified }: Props) {
         <div
           className={`text-6xl font-bold ${colorFor(totalShown)} tabular-nums leading-none transition-colors`}
         >
-          {totalShown}
+          {maxPossible === 0 ? '—' : totalShown}
         </div>
-        <div className="text-[var(--color-text-mute)] text-sm">/100</div>
+        <div className="text-[var(--color-text-mute)] text-sm">
+          / {maxPossible === 0 ? '—' : maxPossible}
+        </div>
         {isModified && (
           <div className="flex flex-col text-xs">
             <div className="text-[var(--color-text-mute)] line-through tabular-nums">
@@ -120,7 +126,9 @@ export function ReportCard({ report, modified }: Props) {
       </div>
 
       <div className="text-[10px] text-[var(--color-text-mute)] uppercase tracking-wider pt-1 border-t border-[var(--color-border)] leading-relaxed">
-        [ HOW ] EACH SCORE IS PERCENTILE-RANKED AGAINST {report.explanations[0]?.benchmark.p10 != null ? 'LIVE' : 'CAPTURED'} TORONTO BENCHMARKS. CLICK [+] FOR THE FULL BREAKDOWN.
+        [ HOW ] SCORE OUT OF {maxPossible} ({missingCount > 0 ? `${9 - missingCount}/9 COMPONENTS WITH DATA, OTHERS EXCLUDED` : 'ALL 9 COMPONENTS'}).
+        EACH IS PERCENTILE-RANKED AGAINST {report.benchmarksCapturedAt ? `TORONTO BENCHMARKS CAPTURED ${new Date(report.benchmarksCapturedAt).toISOString().slice(0, 10)}` : 'LIVE TORONTO BENCHMARKS'}.
+        CLICK [+] FOR THE FULL BREAKDOWN.
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 text-xs pt-2 border-t border-[var(--color-border)]">

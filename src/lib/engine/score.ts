@@ -10,6 +10,7 @@ import type {
 
 const SIX_MONTHS_MS = 1000 * 60 * 60 * 24 * 30 * 6;
 const NEUTRAL = 50;
+const NO_CONSTRUCTION_FLOOR = 45;
 
 function clamp01(n: number): number {
   return Math.max(0, Math.min(100, n));
@@ -46,11 +47,42 @@ function pickBench(key: BenchKey, radiusMeters: number) {
   return scaleBench(m, radiusMeters);
 }
 
+export interface DataPresence {
+  amenityDensity: boolean;
+  transitScore: boolean;
+  foodAccess: boolean;
+  greenSpace: boolean;
+  development: boolean;
+  civicScore: boolean;
+  cultureScore: boolean;
+  recreationScore: boolean;
+  serviceScore: boolean;
+}
+
+export interface ComputeBreakdownResult {
+  breakdown: ScoreBreakdown;
+  presence: DataPresence;
+  counts: {
+    restaurants: number;
+    cafes: number;
+    schools: number;
+    groceries: number;
+    parks: number;
+    transit: number;
+    construction: number;
+    civic: number;
+    culture: number;
+    recreation: number;
+    service: number;
+    recentPermits: number;
+  };
+}
+
 export function computeBreakdown(
   amenities: Amenity[],
   permits: Permit[],
   radiusMeters: number = 1500,
-): ScoreBreakdown {
+): ComputeBreakdownResult {
   const restaurants = countKinds(amenities, ['restaurant']);
   const cafes = countKinds(amenities, ['cafe']);
   const schools = countKinds(amenities, ['school']);
@@ -125,7 +157,7 @@ export function computeBreakdown(
       percentileScore(construction, b.construction.p10, b.construction.p90, false),
     );
     if (development === NEUTRAL && construction === 0) {
-      development = 45;
+      development = NO_CONSTRUCTION_FLOOR;
     }
   }
 
@@ -142,7 +174,7 @@ export function computeBreakdown(
     percentileScore(service, b.service.p10, b.service.p90, false),
   );
 
-  return {
+  const breakdown: ScoreBreakdown = {
     amenityDensity,
     transitScore,
     foodAccess,
@@ -153,24 +185,82 @@ export function computeBreakdown(
     recreationScore,
     serviceScore,
   };
+
+  const presence: DataPresence = {
+    amenityDensity: restaurants + cafes + schools > 0,
+    transitScore: transit > 0,
+    foodAccess: groceries > 0,
+    greenSpace: parks > 0,
+    development: recentPermits > 0 || construction > 0,
+    civicScore: civic > 0,
+    cultureScore: culture > 0,
+    recreationScore: recreation > 0,
+    serviceScore: service > 0,
+  };
+
+  const counts = {
+    restaurants,
+    cafes,
+    schools,
+    groceries,
+    parks,
+    transit,
+    construction,
+    civic,
+    culture,
+    recreation,
+    service,
+    recentPermits,
+  };
+
+  return { breakdown, presence, counts };
 }
 
-export function computeTotal(breakdown: ScoreBreakdown): LivabilityScore {
+export interface ComputeTotalOptions {
+  presence?: DataPresence;
+}
+
+export function computeTotal(
+  breakdown: ScoreBreakdown,
+  options: ComputeTotalOptions = {},
+): LivabilityScore {
   const w = CONFIG.weights;
-  const total =
-    breakdown.amenityDensity * w.amenityDensity +
-    breakdown.transitScore * w.transitScore +
-    breakdown.foodAccess * w.foodAccess +
-    breakdown.greenSpace * w.greenSpace +
-    breakdown.development * w.development +
-    breakdown.civicScore * w.civicScore +
-    breakdown.cultureScore * w.cultureScore +
-    breakdown.recreationScore * w.recreationScore +
-    breakdown.serviceScore * w.serviceScore;
-  const totalClamped = Math.round(clamp01(total));
+  const presence: DataPresence = options.presence ?? {
+    amenityDensity: true,
+    transitScore: true,
+    foodAccess: true,
+    greenSpace: true,
+    development: true,
+    civicScore: true,
+    cultureScore: true,
+    recreationScore: true,
+    serviceScore: true,
+  };
+  const keys: (keyof ScoreBreakdown)[] = [
+    'amenityDensity',
+    'transitScore',
+    'foodAccess',
+    'greenSpace',
+    'development',
+    'civicScore',
+    'cultureScore',
+    'recreationScore',
+    'serviceScore',
+  ];
+  const presentKeys = keys.filter((k) => presence[k]);
+  const totalWeight = presentKeys.reduce((sum, k) => sum + w[k], 0);
+  const rawTotal = presentKeys.reduce(
+    (sum, k) => sum + breakdown[k] * w[k],
+    0,
+  );
+  const normalized = totalWeight > 0 ? rawTotal / totalWeight : 0;
+  const totalClamped = Math.round(clamp01(normalized));
+  const maxPossible = Math.round(totalWeight * 100);
   return {
     total: totalClamped,
+    maxPossible,
     breakdown,
+    presence,
     cityAverage: NEUTRAL,
     ranking: computeRanking(totalClamped),
   };

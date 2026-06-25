@@ -20,7 +20,19 @@ const NEUTRAL: ScoreBreakdown = {
 
 const SCORE: LivabilityScore = {
   total: 50,
+  maxPossible: 100,
   breakdown: NEUTRAL,
+  presence: {
+    amenityDensity: true,
+    transitScore: true,
+    foodAccess: true,
+    greenSpace: true,
+    development: true,
+    civicScore: true,
+    cultureScore: true,
+    recreationScore: true,
+    serviceScore: true,
+  },
   cityAverage: 50,
   ranking: { percentile: 50, label: 'Average' },
 };

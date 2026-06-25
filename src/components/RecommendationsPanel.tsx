@@ -5,6 +5,7 @@ import type {
   NeighborhoodReport,
   Recommendation,
   RecommendationResponse,
+  RecommendationThinking,
 } from '@/lib/types';
 import { clientHeaders } from '@/lib/api/client';
 
@@ -14,11 +15,13 @@ interface Props {
   onActivate: (scenarioId: string) => void;
 }
 
-const CACHE_KEY = 'nn:recommendations:v1';
+const CACHE_KEY = 'nn:recommendations:v2';
 
 interface CachedRecs {
   address: string;
   recommendations: Recommendation[];
+  thinking: RecommendationThinking;
+  ideas: string;
   modelUsed: string;
 }
 
@@ -58,20 +61,28 @@ export function RecommendationsPanel({
   onActivate,
 }: Props) {
   const [recs, setRecs] = useState<Recommendation[]>([]);
+  const [thinking, setThinking] = useState<RecommendationThinking | null>(null);
+  const [ideas, setIdeas] = useState<string>('');
   const [modelUsed, setModelUsed] = useState<string>('idle');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cacheKey, setCacheKey] = useState(0);
+  const [showThinking, setShowThinking] = useState(false);
+  const [showIdeas, setShowIdeas] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     const cached = loadCache(report.address);
     if (cached) {
       setRecs(cached.recommendations);
+      setThinking(cached.thinking);
+      setIdeas(cached.ideas);
       setModelUsed(cached.modelUsed);
       return;
     }
     setRecs([]);
+    setThinking(null);
+    setIdeas('');
     setModelUsed('loading');
     setError(null);
     setLoading(true);
@@ -88,10 +99,14 @@ export function RecommendationsPanel({
         const data = (await res.json()) as RecommendationResponse;
         if (cancelled) return;
         setRecs(data.recommendations);
+        setThinking(data.thinking);
+        setIdeas(data.ideas);
         setModelUsed(data.modelUsed);
         saveCache({
           address: report.address,
           recommendations: data.recommendations,
+          thinking: data.thinking,
+          ideas: data.ideas,
           modelUsed: data.modelUsed,
         });
       } catch (e) {
@@ -112,6 +127,8 @@ export function RecommendationsPanel({
     setCacheKey((k) => k + 1);
   }
 
+  const isFallback = modelUsed === 'fallback';
+
   return (
     <div className="flex flex-col gap-2 p-4 border border-[var(--color-border)] bg-[var(--color-surface)]">
       <div className="flex items-center justify-between border-b border-[var(--color-border)] pb-2">
@@ -119,7 +136,10 @@ export function RecommendationsPanel({
           [ AI RECOMMENDATIONS ]
         </h2>
         <div className="flex items-center gap-2 text-[10px] text-[var(--color-text-mute)] uppercase tracking-wider">
-          <span>MODEL: {modelUsed.toUpperCase()}</span>
+          <span>
+            MODEL: {modelUsed.toUpperCase()}
+            {isFallback && ' (DETERMINISTIC)'}
+          </span>
           <button
             type="button"
             onClick={refresh}
@@ -191,6 +211,61 @@ export function RecommendationsPanel({
           );
         })}
       </ul>
+
+      {ideas && (
+        <div className="border border-[var(--color-border)] bg-black">
+          <button
+            type="button"
+            onClick={() => setShowIdeas((s) => !s)}
+            className="w-full flex items-center justify-between px-3 py-2 text-[10px] uppercase tracking-widest text-[var(--color-text-dim)] hover:text-[var(--color-accent)]"
+          >
+            <span className="text-[var(--color-accent)] font-semibold">
+              [ IDEAS // CREATIVE AI SUGGESTIONS ]
+            </span>
+            <span>{showIdeas ? '[-]' : '[+]'}</span>
+          </button>
+          {showIdeas && (
+            <div className="border-t border-[var(--color-border)] p-3 text-xs text-[var(--color-text)] leading-relaxed whitespace-pre-wrap">
+              {ideas}
+            </div>
+          )}
+        </div>
+      )}
+
+      {thinking && (
+        <div className="border border-[var(--color-border)] bg-black">
+          <button
+            type="button"
+            onClick={() => setShowThinking((s) => !s)}
+            className="w-full flex items-center justify-between px-3 py-2 text-[10px] uppercase tracking-widest text-[var(--color-text-dim)] hover:text-[var(--color-accent)]"
+          >
+            <span className="text-[var(--color-accent)] font-semibold">
+              [ THINKING // AI INPUT + RAW OUTPUT ]
+            </span>
+            <span>{showThinking ? '[-]' : '[+]'}</span>
+          </button>
+          {showThinking && (
+            <div className="border-t border-[var(--color-border)] p-3 flex flex-col gap-3 text-[10px]">
+              <div>
+                <div className="text-[var(--color-text-mute)] uppercase tracking-widest mb-1">
+                  [ PROMPT SENT TO MODEL ]
+                </div>
+                <pre className="text-[var(--color-text-dim)] font-mono whitespace-pre-wrap break-words leading-relaxed max-h-48 overflow-y-auto">
+                  {thinking.prompt}
+                </pre>
+              </div>
+              <div>
+                <div className="text-[var(--color-text-mute)] uppercase tracking-widest mb-1">
+                  [ RAW MODEL RESPONSE ]
+                </div>
+                <pre className="text-[var(--color-text-dim)] font-mono whitespace-pre-wrap break-words leading-relaxed max-h-48 overflow-y-auto">
+                  {thinking.raw}
+                </pre>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

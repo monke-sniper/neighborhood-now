@@ -41,10 +41,10 @@ const NEUTRAL: ScoreBreakdown = {
 describe('computeBreakdown', () => {
   it('returns reasonable breakdown for empty input (no 13/100 floor)', () => {
     const result = computeBreakdown([], []);
-    expect(result.amenityDensity).toBe(0);
-    expect(result.foodAccess).toBe(0);
-    expect(result.transitScore).toBe(0);
-    expect(result.development).toBeGreaterThanOrEqual(0);
+    expect(result.breakdown.amenityDensity).toBe(0);
+    expect(result.breakdown.foodAccess).toBe(0);
+    expect(result.breakdown.transitScore).toBe(0);
+    expect(result.breakdown.development).toBeGreaterThanOrEqual(0);
   });
 
   it('produces high score for downtown-density amenities', () => {
@@ -56,9 +56,9 @@ describe('computeBreakdown', () => {
       ...Array.from({ length: 200 }, (_, i) => amenity('bus_stop', `b${i}`)),
     ];
     const result = computeBreakdown(amenities, []);
-    expect(result.amenityDensity).toBeGreaterThan(80);
-    expect(result.foodAccess).toBeGreaterThan(60);
-    expect(result.transitScore).toBeGreaterThan(60);
+    expect(result.breakdown.amenityDensity).toBeGreaterThan(80);
+    expect(result.breakdown.foodAccess).toBeGreaterThan(60);
+    expect(result.breakdown.transitScore).toBeGreaterThan(60);
   });
 
   it('produces low score for sparse suburban area', () => {
@@ -68,8 +68,8 @@ describe('computeBreakdown', () => {
       amenity('school', 's1'),
     ];
     const result = computeBreakdown(amenities, []);
-    expect(result.amenityDensity).toBeLessThan(20);
-    expect(result.foodAccess).toBeLessThan(20);
+    expect(result.breakdown.amenityDensity).toBeLessThan(20);
+    expect(result.breakdown.foodAccess).toBeLessThan(20);
   });
 
   it('counts recent permits in 6-month window only', () => {
@@ -82,18 +82,119 @@ describe('computeBreakdown', () => {
     );
     const a = computeBreakdown(amenities, permits);
     const b = computeBreakdown(amenities, [permit(old, 'o1')]);
-    expect(a.development).toBeGreaterThanOrEqual(b.development);
+    expect(a.breakdown.development).toBeGreaterThanOrEqual(b.breakdown.development);
   });
 
   it('handles 0 amenities without crashing or returning the old 13/100 floor', () => {
     const result = computeBreakdown([], []);
-    const total = computeTotal(result).total;
+    const total = computeTotal(result.breakdown, { presence: result.presence }).total;
     expect(total).toBeGreaterThanOrEqual(0);
     expect(total).toBeLessThanOrEqual(100);
   });
+
+  it('marks components with 0 data as not present', () => {
+    const amenities: Amenity[] = [
+      amenity('restaurant', 'r1'),
+      amenity('cafe', 'c1'),
+    ];
+    const result = computeBreakdown(amenities, []);
+    expect(result.presence.amenityDensity).toBe(true);
+    expect(result.presence.transitScore).toBe(false);
+    expect(result.presence.foodAccess).toBe(false);
+    expect(result.presence.greenSpace).toBe(false);
+    expect(result.presence.civicScore).toBe(false);
+  });
 });
 
-describe('computeTotal', () => {
+describe('computeTotal (out-of-N dynamic denominator)', () => {
+  it('excludes missing components from maxPossible', () => {
+    const all: ScoreBreakdown = {
+      amenityDensity: 80,
+      transitScore: 70,
+      foodAccess: 60,
+      greenSpace: 50,
+      development: 40,
+      civicScore: 30,
+      cultureScore: 20,
+      recreationScore: 15,
+      serviceScore: 10,
+    };
+    const presence: import('@/lib/engine/score').DataPresence = {
+      amenityDensity: true,
+      transitScore: true,
+      foodAccess: false,
+      greenSpace: false,
+      development: true,
+      civicScore: false,
+      cultureScore: false,
+      recreationScore: false,
+      serviceScore: false,
+    };
+    const result = computeTotal(all, { presence });
+    const presentWeight =
+      0.18 + 0.18 + 0.1;
+    expect(result.maxPossible).toBe(Math.round(presentWeight * 100));
+    expect(result.presence).toEqual(presence);
+  });
+
+  it('renormalizes so 4/9 components with data gives a fair score', () => {
+    const four: ScoreBreakdown = {
+      amenityDensity: 100,
+      transitScore: 100,
+      foodAccess: 100,
+      greenSpace: 100,
+      development: 0,
+      civicScore: 0,
+      cultureScore: 0,
+      recreationScore: 0,
+      serviceScore: 0,
+    };
+    const presence: import('@/lib/engine/score').DataPresence = {
+      amenityDensity: true,
+      transitScore: true,
+      foodAccess: true,
+      greenSpace: true,
+      development: false,
+      civicScore: false,
+      cultureScore: false,
+      recreationScore: false,
+      serviceScore: false,
+    };
+    const result = computeTotal(four, { presence });
+    expect(result.total).toBe(100);
+    expect(result.maxPossible).toBe(60);
+  });
+
+  it('returns 0/0 when all components missing', () => {
+    const all: ScoreBreakdown = {
+      amenityDensity: 0,
+      transitScore: 0,
+      foodAccess: 0,
+      greenSpace: 0,
+      development: 0,
+      civicScore: 0,
+      cultureScore: 0,
+      recreationScore: 0,
+      serviceScore: 0,
+    };
+    const presence: import('@/lib/engine/score').DataPresence = {
+      amenityDensity: false,
+      transitScore: false,
+      foodAccess: false,
+      greenSpace: false,
+      development: false,
+      civicScore: false,
+      cultureScore: false,
+      recreationScore: false,
+      serviceScore: false,
+    };
+    const result = computeTotal(all, { presence });
+    expect(result.total).toBe(0);
+    expect(result.maxPossible).toBe(0);
+  });
+});
+
+describe('computeTotal (legacy / no presence)', () => {
   it('returns 100 when all components are 100', () => {
     const max: ScoreBreakdown = {
       amenityDensity: 100,
@@ -107,6 +208,7 @@ describe('computeTotal', () => {
       serviceScore: 100,
     };
     expect(computeTotal(max).total).toBe(100);
+    expect(computeTotal(max).maxPossible).toBe(100);
   });
 
   it('returns 0 when all components are 0', () => {

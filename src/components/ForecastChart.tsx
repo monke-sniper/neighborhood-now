@@ -15,6 +15,7 @@ import {
   YAxis,
 } from 'recharts';
 import type { Trend } from '@/lib/types';
+import { getBenchmarkTemplate } from '@/lib/engine/forecast';
 
 interface Props {
   trends: Trend[];
@@ -23,7 +24,8 @@ interface Props {
 interface Row {
   month: string;
   isForecast: boolean;
-  [signal: string]: number | string | boolean;
+  isTemplate?: boolean;
+  [signal: string]: number | boolean | string | undefined;
 }
 
 const HISTORY_LABELS = Array.from({ length: 12 }, (_, i) => {
@@ -31,61 +33,87 @@ const HISTORY_LABELS = Array.from({ length: 12 }, (_, i) => {
   return offset === 0 ? 'NOW' : `${offset}m`;
 });
 
-const FORECAST_LABELS = ['+6m', '+12m', '+24m'];
 const COLORS = ['#5eead4', '#fbbf24', '#a78bfa'];
 
-function clamp01(n: number): number {
-  return Math.max(0, Math.min(100, n));
-}
-
 export function ForecastChart({ trends }: Props) {
-  const data = useMemo<Row[]>(() => {
+  const { data, isTemplate, templateNote, primary } = useMemo(() => {
     const n = 12;
     const out: Row[] = [];
-    for (let i = 0; i < n; i++) {
-      const row: Row = {
-        month: HISTORY_LABELS[i]!,
-        isForecast: false,
-      };
-      for (const t of trends) {
-        const v = t.history?.[i] ?? 0;
-        row[t.signal] = v;
-      }
-      out.push(row);
-    }
+    let template = false;
+    let note = '';
+    let primaryTrend: Trend | null = null;
+
     if (trends.length > 0) {
-      const last = trends[0]!;
-      const f6 = last.forecast6m;
-      const f12 = last.forecast12m;
-      const f24 = last.forecast24m;
-      const b6 = last.band?.forecast6m;
-      const b12 = last.band?.forecast12m;
-      const b24 = last.band?.forecast24m;
+      primaryTrend = trends[0]!;
+      const tpl = getBenchmarkTemplate(primaryTrend.signal);
+      const useTemplate =
+        primaryTrend.history.every((v) => v === 0) &&
+        primaryTrend.forecast6m === 0;
+      template = useTemplate;
+      note = tpl.note;
+
+      for (let i = 0; i < n; i++) {
+        const row: Row = {
+          month: HISTORY_LABELS[i]!,
+          isForecast: false,
+          isTemplate: useTemplate,
+        };
+        const v = useTemplate
+          ? (tpl.history[i] ?? 0)
+          : primaryTrend.history?.[i] ?? 0;
+        row[primaryTrend.signal] = v;
+        out.push(row);
+      }
+
+      const last = primaryTrend.history?.[n - 1] ?? 0;
+      const f6 = useTemplate
+        ? tpl.history[n - 1]! * 1.1
+        : primaryTrend.forecast6m;
+      const f12 = useTemplate
+        ? tpl.history[n - 1]! * 1.2
+        : primaryTrend.forecast12m;
+      const f24 = useTemplate
+        ? tpl.history[n - 1]! * 1.3
+        : primaryTrend.forecast24m;
+      void last;
+
       out.push(
         {
           month: '+6m',
           isForecast: true,
-          [trends[0].signal]: f6,
-          ...(b6 ? { [`${trends[0].signal}__low`]: b6.low, [`${trends[0].signal}__high`]: b6.high } : {}),
+          isTemplate: useTemplate,
+          [primaryTrend.signal]: Math.round(f6),
         },
         {
           month: '+12m',
           isForecast: true,
-          [trends[0].signal]: f12,
-          ...(b12 ? { [`${trends[0].signal}__low`]: b12.low, [`${trends[0].signal}__high`]: b12.high } : {}),
+          isTemplate: useTemplate,
+          [primaryTrend.signal]: Math.round(f12),
         },
         {
           month: '+24m',
           isForecast: true,
-          [trends[0].signal]: f24,
-          ...(b24 ? { [`${trends[0].signal}__low`]: b24.low, [`${trends[0].signal}__high`]: b24.high } : {}),
+          isTemplate: useTemplate,
+          [primaryTrend.signal]: Math.round(f24),
         },
       );
+    } else {
+      for (let i = 0; i < n; i++) {
+        out.push({
+          month: HISTORY_LABELS[i]!,
+          isForecast: false,
+        });
+      }
     }
-    return out;
+    return {
+      data: out,
+      isTemplate: template,
+      templateNote: note,
+      primary: primaryTrend,
+    };
   }, [trends]);
 
-  if (trends.length === 0) {
+  if (trends.length === 0 || !primary) {
     return (
       <div className="p-4 border border-[var(--color-border)] bg-[var(--color-surface)] text-xs text-[var(--color-text-mute)] uppercase tracking-wider">
         [ INSUFFICIENT HISTORY // NEED AT LEAST 3 MONTHS OF DATA ]
@@ -93,36 +121,23 @@ export function ForecastChart({ trends }: Props) {
     );
   }
 
-  const allZero = trends.every(
-    (t) => t.history.every((v) => v === 0) && t.forecast6m === 0,
-  );
-  if (allZero) {
-    return (
-      <div className="flex flex-col gap-2 p-4 border border-[var(--color-border)] bg-[var(--color-surface)]">
-        <h2 className="text-xs uppercase tracking-widest text-[var(--color-accent)] font-semibold border-b border-[var(--color-border)] pb-2">
-          [ 2-YEAR FORECAST ]
-        </h2>
-        <div className="text-xs text-[var(--color-text-mute)] uppercase tracking-wider py-6 text-center">
-          [ NO HISTORICAL ACTIVITY // CANNOT FORECAST TRENDLESS DATA ]
-        </div>
-      </div>
-    );
-  }
-
-  const primary = trends[0]!;
-  const secondary = trends[1];
-  const showSecondary = Boolean(secondary);
+  const showSecondary = Boolean(trends[1]);
   const lowKey = `${primary.signal}__low`;
   const highKey = `${primary.signal}__high`;
+  const methodLabel = isTemplate
+    ? 'TEMPLATE'
+    : primary.method?.toUpperCase() ?? 'FLAT';
 
   return (
     <div className="flex flex-col gap-2 p-4 border border-[var(--color-border)] bg-[var(--color-surface)]">
       <div className="flex items-center justify-between border-b border-[var(--color-border)] pb-2">
         <h2 className="text-xs uppercase tracking-widest text-[var(--color-accent)] font-semibold">
-          [ 2-YEAR FORECAST // 12M HISTORY + 24M PROJECTION ]
+          [ 2-YEAR FORECAST // 12M HISTORY + 24M PROJECTION
+          {isTemplate ? ' // TEMPLATE' : ''} ]
         </h2>
         <div className="text-[10px] text-[var(--color-text-mute)] uppercase tracking-wider">
-          METHOD: {primary.method?.toUpperCase() ?? 'FLAT'} · R² {primary.r2.toFixed(2)}
+          METHOD: {methodLabel}
+          {!isTemplate && ` · R² ${primary.r2.toFixed(2)}`}
         </div>
       </div>
 
@@ -168,28 +183,32 @@ export function ForecastChart({ trends }: Props) {
                 fontFamily: 'var(--font-mono)',
               }}
             />
-            <Area
-              type="monotone"
-              dataKey={highKey}
-              stroke="none"
-              fill="#5eead4"
-              fillOpacity={0.08}
-              isAnimationActive={false}
-              connectNulls={false}
-            />
-            <Area
-              type="monotone"
-              dataKey={lowKey}
-              stroke="none"
-              fill="#000000"
-              fillOpacity={1}
-              isAnimationActive={false}
-              connectNulls={false}
-            />
+            {!isTemplate && (
+              <>
+                <Area
+                  type="monotone"
+                  dataKey={highKey}
+                  stroke="none"
+                  fill="#5eead4"
+                  fillOpacity={0.08}
+                  isAnimationActive={false}
+                  connectNulls={false}
+                />
+                <Area
+                  type="monotone"
+                  dataKey={lowKey}
+                  stroke="none"
+                  fill="#000000"
+                  fillOpacity={1}
+                  isAnimationActive={false}
+                  connectNulls={false}
+                />
+              </>
+            )}
             <Bar
               dataKey={primary.signal}
               fill={COLORS[0]}
-              fillOpacity={0.55}
+              fillOpacity={isTemplate ? 0.25 : 0.55}
               isAnimationActive={false}
             />
             <Line
@@ -197,6 +216,7 @@ export function ForecastChart({ trends }: Props) {
               dataKey={primary.signal}
               stroke={COLORS[0]}
               strokeWidth={1.5}
+              strokeDasharray={isTemplate ? '4 4' : undefined}
               dot={{ r: 3, fill: COLORS[0] }}
               connectNulls={false}
               isAnimationActive={false}
@@ -204,10 +224,11 @@ export function ForecastChart({ trends }: Props) {
             {showSecondary && (
               <Line
                 type="monotone"
-                dataKey={secondary!.signal}
+                dataKey={trends[1]!.signal}
                 stroke={COLORS[1]}
                 strokeWidth={1.5}
                 dot={{ r: 3, fill: COLORS[1] }}
+                connectNulls={false}
                 isAnimationActive={false}
               />
             )}
@@ -224,14 +245,24 @@ export function ForecastChart({ trends }: Props) {
           </ComposedChart>
         </ResponsiveContainer>
       </div>
-      <div className="text-[10px] text-[var(--color-text-mute)] flex flex-wrap gap-x-3 gap-y-1 pt-1 border-t border-[var(--color-border)] uppercase tracking-wider">
-        <span>[ BARS ] HISTORY</span>
-        <span className="text-[var(--color-text-mute)]">·</span>
-        <span>[ LINE ] PROJECTION</span>
-        <span className="text-[var(--color-text-mute)]">·</span>
-        <span>[ SHADE ] 1σ BAND</span>
-        <span className="text-[var(--color-text-mute)]">·</span>
-        <span>CONFIDENCE: {primary.confidence.toUpperCase()}</span>
+      <div className="text-[10px] text-[var(--color-text-mute)] flex flex-wrap gap-x-3 gap-y-1 pt-1 border-t border-[var(--color-border)] uppercase tracking-wider leading-relaxed">
+        {isTemplate ? (
+          <>
+            <span>[ DASHED ] TEMPLATE PROJECTION</span>
+            <span className="text-[var(--color-text-mute)]">·</span>
+            <span>{templateNote}</span>
+          </>
+        ) : (
+          <>
+            <span>[ BARS ] HISTORY</span>
+            <span className="text-[var(--color-text-mute)]">·</span>
+            <span>[ LINE ] PROJECTION</span>
+            <span className="text-[var(--color-text-mute)]">·</span>
+            <span>[ SHADE ] 1σ BAND</span>
+            <span className="text-[var(--color-text-mute)]">·</span>
+            <span>CONFIDENCE: {primary.confidence.toUpperCase()}</span>
+          </>
+        )}
       </div>
     </div>
   );

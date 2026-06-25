@@ -182,26 +182,38 @@ export function explainOne(
   amenities: Amenity[],
   permits: Permit[],
   radius: number,
+  presence?: Record<keyof ScoreBreakdown, boolean>,
 ): ScoreExplanation {
   const score = breakdown[key];
   const w = CONFIG.weights[key];
-  const contribution = Number((score * w).toFixed(2));
-  const maxContribution = Number((100 * w).toFixed(2));
+  const totalWeight = presence
+    ? (Object.keys(presence) as (keyof ScoreBreakdown)[])
+        .filter((k) => presence[k])
+        .reduce((s, k) => s + CONFIG.weights[k], 0)
+    : 1;
+  const renormalizedWeight = presence && !presence[key] ? 0 : w / totalWeight;
+  const contribution = Number((score * renormalizedWeight).toFixed(2));
+  const maxContribution = Number((100 * renormalizedWeight).toFixed(2));
   const benchmark = pickBench(key, radius);
-  const tier = tierFor(score);
-  const percentile = percentileFor(score);
+  const isMissing = Boolean(presence && !presence[key]);
+  const tier: Tier = isMissing ? 'MINIMAL' : tierFor(score);
+  const percentile: PercentileLabel = isMissing
+    ? 'Bottom 25%'
+    : percentileFor(score);
   const parts = countBreakdown(key, amenities, permits);
   const total = totalCount(parts);
-  const sentence = buildSentence(
-    key,
-    total,
-    parts,
-    tier,
-    percentile,
-    contribution,
-    maxContribution,
-    benchmark,
-  );
+  const sentence = isMissing
+    ? `${LABELS[key]}: no data for this area (component excluded from score).`
+    : buildSentence(
+        key,
+        total,
+        parts,
+        tier,
+        percentile,
+        contribution,
+        maxContribution,
+        benchmark,
+      );
   return {
     key,
     label: LABELS[key],
@@ -225,7 +237,8 @@ export function explainAll(
   radius: number,
 ): ScoreExplanation[] {
   const keys = Object.keys(LABELS) as (keyof ScoreBreakdown)[];
+  const presence = score.presence;
   return keys.map((k) =>
-    explainOne(k, score.breakdown, amenities, permits, radius),
+    explainOne(k, score.breakdown, amenities, permits, radius, presence),
   );
 }

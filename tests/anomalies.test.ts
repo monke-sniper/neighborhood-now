@@ -65,8 +65,8 @@ describe('detectAnomalies', () => {
     };
     const result = detectAnomalies(ctx);
     const names = result.map((a) => a.signal);
-    expect(names).toContain('Restaurants in 1500m');
-    expect(names).toContain('Cafés in 1500m');
+    expect(names).toContain('Restaurants in 3km');
+    expect(names).toContain('Cafés in 3km');
   });
 
   it('sorts anomalies by absolute z-score descending', () => {

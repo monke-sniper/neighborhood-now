@@ -30,31 +30,42 @@ function formatDelta(delta: number): string {
   return delta.toFixed(1);
 }
 
+function radiusLabel(m: number): string {
+  return m >= 1000 ? `${m / 1000}KM` : `${m}M`;
+}
+
 export function SchoolsPanel({ report }: Props) {
   const center = report.coords;
   const schools = report.amenities.amenities
     .filter((a) => a.kind === 'school');
+  const radius = report.radiusMeters ?? 1500;
 
   if (schools.length === 0) {
     return (
       <div className="flex flex-col gap-2 p-4 border border-[var(--color-border)] bg-[var(--color-surface)]">
         <h2 className="text-xs uppercase tracking-widest text-[var(--color-accent)] font-semibold border-b border-[var(--color-border)] pb-2">
-          [ SCHOOLS // NO DATA ]
+          [ SCHOOLS // {radiusLabel(radius)} RADIUS ]
         </h2>
         <div className="text-xs text-[var(--color-text-mute)] uppercase tracking-wider py-2 text-center">
-          [ NO SCHOOLS FOUND IN 1500M RADIUS ]
+          [ NO SCHOOLS MAPPED IN {radiusLabel(radius).toUpperCase()} RADIUS ]
+          <br />
+          <span className="text-[10px]">
+            SCHOOLS MAY EXIST BUT ARE NOT IN OPENSTREETMAP. TRY A LARGER RADIUS.
+          </span>
         </div>
       </div>
     );
   }
 
-  const currentTotal = computeTotal(
-    computeBreakdown(report.amenities.amenities, report.permits),
-  ).total;
+  const computed = computeBreakdown(report.amenities.amenities, report.permits);
+  const currentTotal = computeTotal(computed.breakdown, {
+    presence: computed.presence,
+  }).total;
 
   const impacts: SchoolImpact[] = schools.map((s) => {
     const without = report.amenities.amenities.filter((a) => a.id !== s.id);
-    const altTotal = computeTotal(computeBreakdown(without, report.permits)).total;
+    const alt = computeBreakdown(without, report.permits);
+    const altTotal = computeTotal(alt.breakdown, { presence: alt.presence }).total;
     const name = pickName(s);
     return {
       amenity: s,
@@ -74,7 +85,7 @@ export function SchoolsPanel({ report }: Props) {
     <div className="flex flex-col gap-2 p-4 border border-[var(--color-border)] bg-[var(--color-surface)]">
       <div className="flex items-center justify-between border-b border-[var(--color-border)] pb-2">
         <h2 className="text-xs uppercase tracking-widest text-[var(--color-accent)] font-semibold">
-          [ SCHOOLS // {schools.length} · INDIVIDUAL IMPACT ]
+          [ SCHOOLS // {schools.length} · {radiusLabel(radius).toUpperCase()} · INDIVIDUAL IMPACT ]
         </h2>
         <div className="text-[10px] text-[var(--color-text-mute)] uppercase tracking-wider">
           COUNTERFACTUAL Δ
