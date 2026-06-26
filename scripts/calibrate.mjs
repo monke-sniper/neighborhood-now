@@ -92,7 +92,7 @@ async function fetchOverpass(lat, lon) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent': 'NeighborhoodNow-calibrate/1.0 (hackathon)',
+          'User-Agent': 'NeighborhoodNow-calibrate/1.0',
         },
         body,
         cache: 'no-store',

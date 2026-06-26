@@ -2,7 +2,7 @@
   "name": "neighborhood-now",
   "version": "1.0.0",
   "private": true,
-  "description": "Type an address. See what is happening. Know where it is going. FutureHacks 2026.",
+  "description": "Neighborhood intelligence platform — livability scores, anomaly alerts, forecasts, and what-if simulations for any address.",
   "author": "monke-sniper",
   "license": "UNLICENSED",
   "scripts": {

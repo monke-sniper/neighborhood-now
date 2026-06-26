@@ -17,7 +17,7 @@ export const CONFIG = {
     ],
     defaultRadius: 3000,
     timeoutSec: 25,
-    userAgent: 'NeighborhoodNow/1.0 (hackathon; contact: hello@neighborhood.now)',
+    userAgent: 'NeighborhoodNow/1.0 (contact: hello@neighborhood.now)',
   },
   builddata: {
     url: 'https://api.builddata.ca/permit/export',
@@ -26,7 +26,7 @@ export const CONFIG = {
   },
   nominatim: {
     url: 'https://nominatim.openstreetmap.org/search',
-    userAgent: 'NeighborhoodNow/1.0 (hackathon)',
+    userAgent: 'NeighborhoodNow/1.0',
     limit: 1,
   },
   complaints: {
